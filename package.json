@@ -1,0 +1,30 @@
+{
+  "name": "agent-working-memory",
+  "version": "0.1.0",
+  "description": "Two-tier decision memory for Claude Code: Tier A pocket card + Tier B decision library.",
+  "type": "module",
+  "bin": {
+    "memory": "./src/memory-cli.mjs"
+  },
+  "scripts": {
+    "test": "node --test tests/*.test.mjs",
+    "hygiene": "node src/hygiene.mjs .",
+    "refresh": "node src/refresh.mjs",
+    "compact": "node src/compact.mjs",
+    "write-card": "node src/write-card.mjs"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "license": "MIT",
+  "files": [
+    "src",
+    "hooks",
+    "templates",
+    "scripts",
+    "examples",
+    "docs",
+    "README.md",
+    "LICENSE"
+  ]
+}

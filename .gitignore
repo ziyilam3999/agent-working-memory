@@ -1,0 +1,20 @@
+# Node
+node_modules/
+npm-debug.log*
+.npm/
+
+# Real user content: these paths may be created if a developer runs
+# the tools from inside a clone. They MUST NOT be committed.
+tier-b/topics/
+tier-a.md
+*.card.md
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Temp
+/tmp/
+*.tmp
