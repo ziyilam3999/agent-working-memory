@@ -31,10 +31,15 @@ PASS=0
 FAIL=0
 declare -a RESULTS
 
+SKIP=0
 record() {
   local name="$1" status="$2" detail="$3"
   RESULTS+=("$name | $status | $detail")
-  if [ "$status" = "PASS" ]; then PASS=$((PASS+1)); else FAIL=$((FAIL+1)); fi
+  case "$status" in
+    PASS) PASS=$((PASS+1)) ;;
+    SKIP) SKIP=$((SKIP+1)) ;;
+    *)    FAIL=$((FAIL+1)) ;;
+  esac
 }
 
 line() { printf '%s\n' "------------------------------------------------------------"; }
@@ -196,7 +201,7 @@ line
 printf '%-6s | %-4s | %s\n' "AC" "STAT" "DETAIL"
 for r in "${RESULTS[@]}"; do printf '%s\n' "$r"; done
 line
-printf 'total PASS=%d FAIL=%d\n' "$PASS" "$FAIL"
+printf 'total PASS=%d FAIL=%d SKIP=%d\n' "$PASS" "$FAIL" "$SKIP"
 
 if [ "$FAIL" -eq 0 ]; then
   # If AC-1 was skipped, that's acceptable for the pre-tag self-check but the
