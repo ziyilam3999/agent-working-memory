@@ -1,7 +1,33 @@
 # Follow-up Plan — Reconcile ~/.claude/settings.json drift with ai-brain canonical
 Date: 2026-04-16
-Status: DRAFT (not yet executed)
+Status: **EXECUTED (Option Y) — closed 2026-04-16**
 Depends on: `.ai-workspace/plans/2026-04-16-awm-hook-injection-fix.md` (closed)
+Ships as: [ai-brain PR #309](https://github.com/ziyilam3999/ai-brain/pull/309)
+        `fix(setup): move cairn hook registrations into canonical settings`
+
+## Post-execution revision note
+This plan was drafted with a paranoid "~1382 bytes of unknown drift, any of
+it could be hiding another silent bug" premise. Inspection falsified that
+premise: **100% of the drift was the 5 cairn hook registrations that
+`setup.sh`'s `install_cairn_hooks()` was merging into the live file at
+install time, plus a trailing-newline difference.** No other deltas.
+
+The plan was restructured mid-execution around the actual root cause:
+`install_cairn_hooks()` used a Python `os.replace(tmp, path)` step to merge
+the cairn entries, which atomically renames a temp file over the target —
+and that rename silently destroys the HardLink/symlink that `create_link`
+had just built in step 5. Every install: link born, link killed. The
+resulting regular file then drifted freely from canonical on every
+subsequent ai-brain edit, which is how the `VAR=val bash /abs/path`
+working-memory hook bug was allowed to silently persist in the live file
+while the canonical had the correct shape all along.
+
+Option Y (the more architectural fix) was chosen over Option X (a 3-line
+`os.replace` → in-place write tweak): move the 5 cairn registrations into
+canonical itself and delete the merge block entirely. Side effect: cairn
+hooks become unconditionally registered at install time regardless of
+probe verdict, but the hook scripts themselves already degrade gracefully
+when `~/.claude/cairn/` is missing, so the effective contract is unchanged.
 
 ## ELI5
 Claude Code reads one settings file that lives in your home folder. There's
@@ -197,17 +223,32 @@ Four steps. Each is independently verifiable and reversible.
   in-progress skill permission. Human review required at step 2; not a
   mechanical merge.
 
-## Checkpoint
-- [ ] DG-1 resolved (does `setup.sh` symlink or copy?)
-- [ ] DG-2 resolved (Windows Dev Mode on?)
-- [ ] Snapshot both files; record md5s
-- [ ] Produce reconciliation table (live-only / canonical-only / agree)
-- [ ] Human review of the table; each diff classified
-- [ ] Merge into canonical; AC-D2, D3 pass
-- [ ] Execute step 4 (Track A or Track B)
-- [ ] AC-D4 pass
-- [ ] Fresh Claude Code session; AC-D5, D6 pass
-- [ ] AC-D7 pass; commit ai-brain changes as a PR
-- [ ] Update CLAUDE.md sync-rules section if Track B was chosen
+## Checkpoint (post-execution)
+- [x] DG-1 resolved: `setup.sh` intends symlink (create_link uses `ln -s` on POSIX, `New-Item -ItemType HardLink` on Windows). BUT `install_cairn_hooks` then used `os.replace(tmp, path)` which silently destroyed the link every install. Root cause identified.
+- [x] DG-2 resolved: Windows Developer Mode **enabled** (`AllowDevelopmentWithoutDevLicense = 0x1`); `MSYS=winsymlinks:nativestrict ln -s` creates real symlinks on this host.
+- [x] Snapshot both files; md5 of pre-swap live = `d91678f4e1cfb6f7dd82012187a7bf24` (saved to `/tmp/awm-settings.pre-hardlink.json`).
+- [x] Reconciliation table produced via `diff -u`. Result: only diff is 5 cairn hook registrations + trailing newline. No surprise content.
+- [x] Option Y chosen: move cairn registrations into canonical, delete `os.replace` merge block.
+- [x] Edited `ai-brain/claude-global-settings.json` to add 5 cairn entries (SessionStart `cairn-session-start`, PreToolUse `cairn-tool-use`, PostToolUse `cairn-tool-use`, Stop `cairn-stop`, SessionEnd `cairn-session-end`). JSON validates.
+- [x] Edited `ai-brain/scripts/setup.sh` to delete the `python3 ... os.replace` block from `install_cairn_hooks()`. Kept mkdir + probe + function-header comment (updated to document the old bug as historical context). Bash syntax clean.
+- [x] Diff between edited canonical and then-current live file: only the trailing newline differs. Semantic no-op to swap.
+- [x] Deleted live regular file; created Windows HardLink via `powershell New-Item -ItemType HardLink`. Verified: both paths land on inode `16607023627658206` with link count 2.
+- [x] Wrapper hook still emits pocket card post-swap; JSON parses.
+- [x] Committed ai-brain changes on branch `fix/cairn-hooks-in-canonical`, pushed, opened [ai-brain PR #309](https://github.com/ziyilam3999/ai-brain/pull/309).
+- [ ] Fresh Claude Code session: pocket card reminder + cairn project-index reminder both present at SessionStart. **(Still pending — user opens a fresh terminal.)**
+- [ ] Merge ai-brain PR #309; re-run setup.sh on this host to confirm it no-ops on the already-correct HardLink (rather than clobbering it). **(Pending post-merge.)**
+
+## AC outcome
+- AC-D1 ✅ (snapshot md5 recorded)
+- AC-D2 ✅ (canonical JSON valid post-merge)
+- AC-D3 ✅ (no hook command starts with `VAR=val` prefix in canonical)
+- AC-D4 ✅ (HardLink installed; `stat -c %i` matches on both paths)
+- AC-D5 **pending** (requires fresh session)
+- AC-D6 **pending** (requires fresh session)
+- AC-D7 ✅ (ai-brain `git status` shows exactly 2 modified files: `claude-global-settings.json` + `scripts/setup.sh`; committed cleanly)
+
+## Deferred to post-merge
+- Re-run `bash ~/coding_projects/ai-brain/scripts/setup.sh` after PR #309 merges. Expected: step 5 reports `[ok] ~/.claude/settings.json -> <canonical>` (no re-link needed because the HardLink already matches); step 8 runs mkdir + probe, no merge, no clobber. This proves the new setup.sh is idempotent and the HardLink survives repeat runs.
+- If at any point the HardLink is broken (by an editor that rewrites instead of in-place-edits settings.json, by a Claude Code upgrade that replaces it, etc.), just re-run setup.sh — step 5 will rebuild.
 
 Last updated: 2026-04-16
