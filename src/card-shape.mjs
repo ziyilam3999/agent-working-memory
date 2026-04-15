@@ -4,7 +4,9 @@
 // followed by a body with at least one "## Decision" section.
 
 export function parseCard(text) {
-  const m = text.match(/^---\n([\s\S]*?)\n---\n([\s\S]*)$/);
+  // Normalize CRLF to LF so behavior is identical regardless of git autocrlf.
+  const normalized = text.replace(/\r\n/g, "\n");
+  const m = normalized.match(/^---\n([\s\S]*?)\n---\n([\s\S]*)$/);
   if (!m) return { ok: false, reason: "missing frontmatter" };
   const front = {};
   for (const line of m[1].split("\n")) {

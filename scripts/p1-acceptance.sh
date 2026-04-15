@@ -10,10 +10,21 @@
 # can be run locally before the repo is created. The final pre-tag self-check run
 # sets AC1=0; the post-tag run sets AC1=1.
 
-export MSYS_NO_PATHCONV=1
 set -u
 
+# Detect MSYS/Git-Bash on Windows: on that platform, native tools (git, node)
+# need Windows-style paths even though bash uses /c/... form. We translate
+# critical paths via cygpath when available.
+win_path() {
+  if command -v cygpath >/dev/null 2>&1; then
+    cygpath -w "$1"
+  else
+    printf '%s' "$1"
+  fi
+}
+
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+REPO_ROOT_WIN="$(win_path "$REPO_ROOT")"
 cd "$REPO_ROOT"
 
 PASS=0
@@ -35,8 +46,9 @@ line
 # ---- AC-2: fresh clone + npm test ----
 echo "[AC-2] fresh-clone + npm test"
 AC2_TMP="$(mktemp -d)"
+AC2_TMP_WIN="$(win_path "$AC2_TMP")"
 if [ -d "$REPO_ROOT/.git" ]; then
-  if git clone -q "$REPO_ROOT" "$AC2_TMP/awm-clone" 2>&1; then
+  if git clone -q "$REPO_ROOT_WIN" "$AC2_TMP_WIN\\awm-clone" 2>&1; then
     if ( cd "$AC2_TMP/awm-clone" && (npm ci 2>/dev/null || npm install 2>/dev/null) && npm test ) >"$AC2_TMP/out.log" 2>&1; then
       record "AC-2" "PASS" "fresh clone npm test exit 0"
     else
@@ -107,7 +119,7 @@ fi
 
 # ---- AC-6: card-shape validator classifies 3+3 correctly ----
 echo "[AC-6] card-shape 3 valid + 3 invalid"
-AC6_OUT="$(node --test "$REPO_ROOT/tests/card-shape.test.mjs" 2>&1 || true)"
+AC6_OUT="$( cd "$REPO_ROOT" && node --test tests/card-shape.test.mjs 2>&1 || true)"
 if printf '%s' "$AC6_OUT" | grep -q "# fail 0" && printf '%s' "$AC6_OUT" | grep -q "# pass 2"; then
   record "AC-6" "PASS" "card-shape.test.mjs all passed"
 else
@@ -117,7 +129,7 @@ fi
 
 # ---- AC-7: compact deterministic + bounded + includes pinned ----
 echo "[AC-7] compact algorithm"
-AC7_OUT="$(node --test "$REPO_ROOT/tests/compact.test.mjs" 2>&1 || true)"
+AC7_OUT="$( cd "$REPO_ROOT" && node --test tests/compact.test.mjs 2>&1 || true)"
 if printf '%s' "$AC7_OUT" | grep -q "# fail 0"; then
   record "AC-7" "PASS" "compact.test.mjs all passed"
 else
