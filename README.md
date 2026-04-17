@@ -1,11 +1,27 @@
 # agent-working-memory
 
+[![License](https://img.shields.io/github/license/ziyilam3999/agent-working-memory)](LICENSE)
+[![Node](https://img.shields.io/badge/node-%3E%3D18-blue)](https://nodejs.org)
+[![Latest release](https://img.shields.io/github/v/release/ziyilam3999/agent-working-memory)](https://github.com/ziyilam3999/agent-working-memory/releases)
+
 A two-tier decision memory mechanism for AI coding agents.
 
 - **Tier A — Pocket Card**: a small (<5 KB) markdown digest injected into every session, holding pinned decisions and a recent-work summary.
 - **Tier B — Decision Library**: an unbounded tree of decision cards on disk, one file per decision, grouped by topic.
 
 This repository is the **public mechanism**: source code, hooks, tests, templates, installer, and docs. It contains **zero real user content**. Your actual decisions live in a separate private store on your machine (default: `$HOME/.claude/agent-working-memory/`).
+
+## How it flows
+
+```mermaid
+graph LR
+    S[Session start] -->|SessionStart hook| A[Tier A: pocket card<br/>≤5 KB digest]
+    A --> W[Work happens<br/>cite cards inline]
+    W -->|memory write| B[Tier B: decision library<br/>unbounded, one file per card]
+    B -->|memory refresh| A
+```
+
+The hook injects Tier A at session start, your work cites cards as needed, and decisions made during the session land as Tier B files which feed back into the next pocket card.
 
 ## Install
 
