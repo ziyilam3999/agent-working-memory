@@ -8,9 +8,33 @@ import { join } from "node:path";
 import { homedir } from "node:os";
 import { loadCards, compact, DEFAULT_BUDGET } from "./compact.mjs";
 
+// Guard against shell tokens that were never expanded by the parent process
+// (e.g. Claude Code's env block ships literal values, so a config like
+// "$HOME/.claude/agent-working-memory" leaks the $HOME token into this
+// process). Writing to such a path creates a bogus directory named $HOME
+// under the current working directory. Refuse loudly instead of silently
+// misrouting writes. See plan:
+//   forge-harness/.ai-workspace/plans/2026-04-19-memory-cli-home-leak-fix.md
+const UNEXPANDED_TOKEN_RE = /\$\{?[A-Za-z_][A-Za-z0-9_]*\}?/;
+
+function assertExpandedPath(candidate, source) {
+  const match = UNEXPANDED_TOKEN_RE.exec(candidate);
+  if (match) {
+    throw new Error(
+      `resolveRoot: ${source} contains an unexpanded shell token (${match[0]}) in value ` +
+      `"${candidate}". Refusing to return a path with a literal $VAR — writing to it ` +
+      `would create a bogus directory under CWD. Fix: unset the env var so the default ` +
+      `${'$'}HOME-based fallback fires, or pass a fully-expanded absolute path.`,
+    );
+  }
+  return candidate;
+}
+
 export function resolveRoot(argRoot) {
-  if (argRoot) return argRoot;
-  if (process.env.WORKING_MEMORY_ROOT) return process.env.WORKING_MEMORY_ROOT;
+  if (argRoot) return assertExpandedPath(argRoot, "argRoot");
+  if (process.env.WORKING_MEMORY_ROOT) {
+    return assertExpandedPath(process.env.WORKING_MEMORY_ROOT, "WORKING_MEMORY_ROOT env var");
+  }
   return join(homedir(), ".claude", "agent-working-memory");
 }
 
