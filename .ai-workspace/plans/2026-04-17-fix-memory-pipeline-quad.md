@@ -44,24 +44,24 @@ Evidence for each finding is inline in the linked GitHub issues. Key files touch
 
 - **AC-1a**: The `## Stage 10` section in `ai-brain/skills/ship/SKILL.md` contains at least one fenced code block with executable gate-check commands. Verify: `sed -n '/^## Stage 10/,/^## /p' ai-brain/skills/ship/SKILL.md | grep -c '```'` returns ≥ 2.
 - **AC-1b**: `WORKING_MEMORY_ROOT` is declared in either `ai-brain/claude-global-settings.json` or `ai-brain/shared-hooks.json`. Verify: `grep -c 'WORKING_MEMORY_ROOT' ai-brain/claude-global-settings.json ai-brain/shared-hooks.json` returns ≥ 1.
-- **AC-1c**: The path resolved from `$WORKING_MEMORY_ROOT` (or default `~/.claude/agent-working-memory/`) contains `tier-b/`. Verify: `test -d "${WORKING_MEMORY_ROOT:-$HOME/.claude/agent-working-memory}/tier-b" && echo pass` prints `pass`.
+- **AC-1c**: The path resolved from `$WORKING_MEMORY_ROOT` (or default `$HOME/.claude/agent-working-memory/`) contains `tier-b/`. Verify: `test -d "${WORKING_MEMORY_ROOT:-$HOME/.claude/agent-working-memory}/tier-b" && echo pass` prints `pass`.
 
 ### AC-2 (issue #326) — H6 can create drift issues
 
 - **AC-2a**: The `cairn-drift` label exists in `ziyilam3999/ai-brain`. Verify: `gh label list -R ziyilam3999/ai-brain --search cairn-drift` returns at least one row.
-- **AC-2b**: After a forced h6 run where the gh call is known to fail (simulate by temporarily setting `GH_TOKEN=invalid`), the latest line in `~/.claude/cairn/heartbeats.log` matching `h6 \[gh-api-fail` contains a colon-delimited reason suffix (e.g. `[gh-api-fail:label-missing]`, `[gh-api-fail:auth]`, `[gh-api-fail:rate-limit]`). Verify: `grep 'h6 \[gh-api-fail:' ~/.claude/cairn/heartbeats.log | wc -l` returns ≥ 1. A bare `[gh-api-fail]` (no colon, no reason) fails the AC.
+- **AC-2b**: After a forced h6 run where the gh call is known to fail (simulate by temporarily setting `GH_TOKEN=invalid`), the latest line in `$HOME/.claude/cairn/heartbeats.log` matching `h6 \[gh-api-fail` contains a colon-delimited reason suffix (e.g. `[gh-api-fail:label-missing]`, `[gh-api-fail:auth]`, `[gh-api-fail:rate-limit]`). Verify: `grep 'h6 \[gh-api-fail:' $HOME/.claude/cairn/heartbeats.log | wc -l` returns ≥ 1. A bare `[gh-api-fail]` (no colon, no reason) fails the AC.
 
 ### AC-3 (issue #327) — T2 retention policy exists
 
 This AC has two forms depending on which retention option the user picks for #327. The executor MUST decide and record the choice (`retention-option: 1 | 2 | 3`) in the PR description before starting AC-3b work, so the reviewer knows which form to verify.
 
 - **AC-3a** (all options): A retention policy decision is recorded in `ai-brain/hive-mind-persist/proposals/cairn/*.md`. Verify: `grep -c 'T2.*retention\|conf.*1.*stale\|tentative.*stale\|T2.*unbounded' ai-brain/hive-mind-persist/proposals/cairn/*.md` returns ≥ 1.
-- **AC-3b-active** (if Option 1 or 2 selected): A retention sweep runs in h5 or h6. Verify: after a forced h5 or h6 run, `~/.claude/cairn/heartbeats.log` contains a line with `t2_stale_marked=N` or `t2_retention_removed=N` (N ≥ 0). `grep -c 't2_stale_marked\|t2_retention_removed' ~/.claude/cairn/heartbeats.log` returns ≥ 1.
+- **AC-3b-active** (if Option 1 or 2 selected): A retention sweep runs in h5 or h6. Verify: after a forced h5 or h6 run, `$HOME/.claude/cairn/heartbeats.log` contains a line with `t2_stale_marked=N` or `t2_retention_removed=N` (N ≥ 0). `grep -c 't2_stale_marked\|t2_retention_removed' $HOME/.claude/cairn/heartbeats.log` returns ≥ 1.
 - **AC-3b-wontfix** (if Option 3 selected): Issue #327 is closed with `wontfix` label and a comment citing the proposal doc from AC-3a. Verify: `gh issue view 327 --json state,labels -q '.state + " " + (.labels[].name)'` includes `CLOSED` and `wontfix`.
 
 ### AC-4 (issue #328) — H5 heartbeat shows graduation summary
 
-- **AC-4a**: After h5's next run, `~/.claude/cairn/heartbeats.log` contains an h5-tagged line with counts (scanned/graduated/etc.). Verify: `grep 'h5.*scanned=' ~/.claude/cairn/heartbeats.log` returns ≥ 1 line.
+- **AC-4a**: After h5's next run, `$HOME/.claude/cairn/heartbeats.log` contains an h5-tagged line with counts (scanned/graduated/etc.). Verify: `grep 'h5.*scanned=' $HOME/.claude/cairn/heartbeats.log` returns ≥ 1 line.
 - **AC-4b**: `cairn/bin/h5-graduate.mjs` writes to `heartbeat()` immediately after the `gradLog("[summary]", ...)` call. Verify by reading lines ~296–310 of the file: a `heartbeat(...)` invocation passes the same `stats` object keys.
 
 ## Out of scope
@@ -93,18 +93,18 @@ test -d "${WORKING_MEMORY_ROOT:-$HOME/.claude/agent-working-memory}/tier-b" && e
 # AC-2: h6 drift
 gh label list -R ziyilam3999/ai-brain --search cairn-drift | wc -l         # expect >= 1
 # AC-2b: after forcing a known gh failure and re-running h6
-grep 'h6 \[gh-api-fail:' ~/.claude/cairn/heartbeats.log | wc -l             # expect >= 1
+grep 'h6 \[gh-api-fail:' $HOME/.claude/cairn/heartbeats.log | wc -l             # expect >= 1
 
 # AC-3: T2 retention (always)
 grep -c 'T2.*retention\|conf.*1.*stale\|tentative.*stale\|T2.*unbounded' hive-mind-persist/proposals/cairn/*.md  # expect >= 1
 # AC-3b-active (if Option 1 or 2 chosen): after forced h5 or h6 run
-grep -c 't2_stale_marked\|t2_retention_removed' ~/.claude/cairn/heartbeats.log  # expect >= 1
+grep -c 't2_stale_marked\|t2_retention_removed' $HOME/.claude/cairn/heartbeats.log  # expect >= 1
 # AC-3b-wontfix (if Option 3 chosen)
 gh issue view 327 --json state,labels -q '.state + " " + (.labels[].name)' | grep -E 'CLOSED.*wontfix'
 
 # AC-4: h5 heartbeat
 # After next h5 fire (or manual: HEARTBEAT_KIND=h5 node cairn/bin/heartbeat-dispatch.mjs)
-grep 'h5.*scanned=' ~/.claude/cairn/heartbeats.log | wc -l                # expect >= 1
+grep 'h5.*scanned=' $HOME/.claude/cairn/heartbeats.log | wc -l                # expect >= 1
 ```
 
 ## Critical files

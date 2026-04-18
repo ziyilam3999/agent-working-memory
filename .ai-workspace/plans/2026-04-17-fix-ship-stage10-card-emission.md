@@ -9,7 +9,7 @@ After `/ship` finishes merging a PR, it's supposed to write a little "we shipped
 ## Context
 
 - `/ship` SKILL.md Stage 10 (lines 427–460 in `ai-brain/skills/ship/SKILL.md`) specifies three gating conditions for card emission after a successful merge.
-- Gate 1 checks for `$WORKING_MEMORY_ROOT` or default path `~/.claude/agent-working-memory/` with `tier-b/` inside.
+- Gate 1 checks for `$WORKING_MEMORY_ROOT` or default path `$HOME/.claude/agent-working-memory/` with `tier-b/` inside.
 - Gate 2 checks for `write-card.mjs` at known paths.
 - Gate 3 checks for `outcome === "success"`.
 - **All three gates currently pass on this machine** — the paths exist, the tool exists, runs are successful.
@@ -28,7 +28,7 @@ After `/ship` finishes merging a PR, it's supposed to write a little "we shipped
 1. **AC-1**: `grep -c '"cardEmission"' ai-brain/skills/ship/SKILL.md` returns a count ≥ 1, confirming Stage 10 still exists and wasn't accidentally deleted.
 2. **AC-2**: The Stage 10 section in SKILL.md contains at least one fenced bash code block with a concrete gate-check command (e.g., `test -d` or `ls`). Verify: `sed -n '/^## Stage 10/,/^## /p' ai-brain/skills/ship/SKILL.md | grep -c '```'` returns ≥ 2 (opening + closing fence).
 3. **AC-3**: `echo $WORKING_MEMORY_ROOT` in a fresh Claude Code session prints a non-empty path. Verify by checking the env var is set in either `claude-global-settings.json` or `shared-hooks.json` via: `grep -c 'WORKING_MEMORY_ROOT' ai-brain/claude-global-settings.json ai-brain/shared-hooks.json` returns ≥ 1.
-4. **AC-4**: The path printed by `$WORKING_MEMORY_ROOT` (or default `~/.claude/agent-working-memory/`) contains `tier-b/`. Verify: `test -d "${WORKING_MEMORY_ROOT:-$HOME/.claude/agent-working-memory}/tier-b" && echo pass` prints `pass`.
+4. **AC-4**: The path printed by `$WORKING_MEMORY_ROOT` (or default `$HOME/.claude/agent-working-memory/`) contains `tier-b/`. Verify: `test -d "${WORKING_MEMORY_ROOT:-$HOME/.claude/agent-working-memory}/tier-b" && echo pass` prints `pass`.
 
 ## Out of scope
 
@@ -59,7 +59,7 @@ test -d "${WORKING_MEMORY_ROOT:-$HOME/.claude/agent-working-memory}/tier-b" && e
 ## Critical files
 
 - `ai-brain/skills/ship/SKILL.md` — Stage 10 section (lines 427–460). Rewrite gate checks from prose to concrete bash commands.
-- `ai-brain/claude-global-settings.json` OR `ai-brain/shared-hooks.json` — add `WORKING_MEMORY_ROOT` env var pointing to `~/.claude/agent-working-memory`.
+- `ai-brain/claude-global-settings.json` OR `ai-brain/shared-hooks.json` — add `WORKING_MEMORY_ROOT` env var pointing to `$HOME/.claude/agent-working-memory`.
 
 ## Checkpoint
 

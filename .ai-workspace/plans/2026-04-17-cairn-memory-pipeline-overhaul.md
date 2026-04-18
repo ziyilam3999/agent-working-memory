@@ -55,13 +55,13 @@ This plan **supersedes** `2026-04-17-fix-memory-pipeline-quad.md` and `2026-04-1
 
 ### AC-Q1 (issue #328) — H5 heartbeat payload
 
-**AC-Q1.1**: After the next h5 run post-fix, `~/.claude/cairn/heartbeats.log` contains an h5-tagged line with counts (`scanned=`, `graduated=`, `dedup_skip=`, `low_conf=`, `gate_reject=`). Verify: `grep 'h5 .*scanned=' ~/.claude/cairn/heartbeats.log | wc -l` returns ≥ 1.
+**AC-Q1.1**: After the next h5 run post-fix, `$HOME/.claude/cairn/heartbeats.log` contains an h5-tagged line with counts (`scanned=`, `graduated=`, `dedup_skip=`, `low_conf=`, `gate_reject=`). Verify: `grep 'h5 .*scanned=' $HOME/.claude/cairn/heartbeats.log | wc -l` returns ≥ 1.
 
 ### AC-Q2 (issue #326) — H6 can create drift issues
 
 **AC-Q2.1**: The `cairn-drift` label exists in `ziyilam3999/ai-brain`. Verify: `gh label list -R ziyilam3999/ai-brain --search cairn-drift | wc -l` ≥ 1.
 
-**AC-Q2.2**: After a forced h6 run where the gh call fails (simulate by `GH_TOKEN=invalid`), the latest `h6 [gh-api-fail` line in `heartbeats.log` contains a colon-delimited reason suffix (e.g., `[gh-api-fail:label-missing]`). Verify: `grep 'h6 \[gh-api-fail:' ~/.claude/cairn/heartbeats.log | wc -l` ≥ 1. Bare `[gh-api-fail]` with no reason fails the AC.
+**AC-Q2.2**: After a forced h6 run where the gh call fails (simulate by `GH_TOKEN=invalid`), the latest `h6 [gh-api-fail` line in `heartbeats.log` contains a colon-delimited reason suffix (e.g., `[gh-api-fail:label-missing]`). Verify: `grep 'h6 \[gh-api-fail:' $HOME/.claude/cairn/heartbeats.log | wc -l` ≥ 1. Bare `[gh-api-fail]` with no reason fails the AC.
 
 ### AC-Q3 (issue #325) — Stage 10 gate checks
 
@@ -109,7 +109,7 @@ This plan **supersedes** `2026-04-17-fix-memory-pipeline-quad.md` and `2026-04-1
 
 **Intent**: When an agent has a mid-session insight, a single command writes it directly into the T2 tier at `kind: insight` with `confidence: 1`, bypassing the tool-failure capture path. The next h5 fire can then graduate it to T3 via the Phase 2.1 relaxed rule.
 
-**AC-P2.2a**: A `cairn learn <text>` subcommand exists in the dispatcher. Verify: `bash ~/.claude/skills/cairn/bin/cairn learn "When the Windows build fails with ETIMEDOUT, kill stale node processes before retrying; this recurs about once per week and wastes roughly five minutes each time"` exits 0 and prints a result line. (Test string is intentionally ≥ 40 chars to clear the Phase-2.1 kind-aware-gate length guard, matching the test input shape documented there.)
+**AC-P2.2a**: A `cairn learn <text>` subcommand exists in the dispatcher. Verify: `bash $HOME/.claude/skills/cairn/bin/cairn learn "When the Windows build fails with ETIMEDOUT, kill stale node processes before retrying; this recurs about once per week and wastes roughly five minutes each time"` exits 0 and prints a result line. (Test string is intentionally ≥ 40 chars to clear the Phase-2.1 kind-aware-gate length guard, matching the test input shape documented there.)
 
 **AC-P2.2b**: After invocation, a T2 file exists with `kind: insight`, `confidence: 1`, and the supplied text in the body. Verify: `grep -l 'kind: insight' ~/coding_projects/ai-brain/hive-mind-persist/session-notes/*.md | wc -l` ≥ 1.
 
@@ -151,7 +151,7 @@ This plan **supersedes** `2026-04-17-fix-memory-pipeline-quad.md` and `2026-04-1
 
 **Intent**: When an agent runs `/cairn find X`, sees note N in results, and note N's text appears in the agent's next shipped PR body, confidence of N bumps by 1.
 
-**AC-P4.1a**: `/cairn find` logs its top-N results (by ID) to `~/.claude/cairn/find-history.jsonl`. Verify: run `cairn find foo`; `tail -1 ~/.claude/cairn/find-history.jsonl | jq '.results | length'` ≥ 1.
+**AC-P4.1a**: `/cairn find` logs its top-N results (by ID) to `$HOME/.claude/cairn/find-history.jsonl`. Verify: run `cairn find foo`; `tail -1 $HOME/.claude/cairn/find-history.jsonl | jq '.results | length'` ≥ 1.
 
 **AC-P4.1b**: A new heartbeat runner (or a Stage in `/ship`) scans recently-merged PR bodies for substrings matching any ID in `find-history.jsonl` from the last 24h; on match, bumps the matched note's `confidence` by 1 and appends `reinforced-by-pr: <url>` to frontmatter. Verify: synthetic test — write an insight N, run find, create a PR with N's text in the body, merge; after the runner fires, `grep 'reinforced-by-pr' hive-mind-persist/session-notes/<N>.md | wc -l` ≥ 1.
 
@@ -159,9 +159,9 @@ This plan **supersedes** `2026-04-17-fix-memory-pipeline-quad.md` and `2026-04-1
 
 **Intent**: Every tier-b card write also emits a cairn T1 entry with `signal: high`. Every cairn T3 graduation mirrors into a tier-b card under topic `cairn-kb`.
 
-**AC-P4.2a**: `memory write` in `agent-working-memory/src/memory-cli.mjs` appends a T1 entry to `~/.claude/cairn/t1-run-scratch/<date>/<session>.jsonl` with `kind: insight, payload.signal: high`. Verify: run `memory write --topic x --id y --title "z"`; `grep 'signal.*high' ~/.claude/cairn/t1-run-scratch/$(date -u +%Y-%m-%d)/*.jsonl | wc -l` ≥ 1.
+**AC-P4.2a**: `memory write` in `agent-working-memory/src/memory-cli.mjs` appends a T1 entry to `$HOME/.claude/cairn/t1-run-scratch/<date>/<session>.jsonl` with `kind: insight, payload.signal: high`. Verify: run `memory write --topic x --id y --title "z"`; `grep 'signal.*high' $HOME/.claude/cairn/t1-run-scratch/$(date -u +%Y-%m-%d)/*.jsonl | wc -l` ≥ 1.
 
-**AC-P4.2b**: When h5 graduates a T2 to T3, it also writes a tier-b card under `tier-b/topics/cairn-kb/`. Verify: force h5 with a synthetic high-signal insight; after graduation, `ls ~/.claude/agent-working-memory/tier-b/topics/cairn-kb/*.md | wc -l` ≥ 1.
+**AC-P4.2b**: When h5 graduates a T2 to T3, it also writes a tier-b card under `tier-b/topics/cairn-kb/`. Verify: force h5 with a synthetic high-signal insight; after graduation, `ls $HOME/.claude/agent-working-memory/tier-b/topics/cairn-kb/*.md | wc -l` ≥ 1.
 
 ### AC-P4.4 — Session-boundary state snapshot (new, from 2026-04-17 user input)
 
@@ -178,11 +178,11 @@ Given hooks can't command the agent, full card-authorship automation is impossib
 
 **AC-P4.4c**: `Stop` hook invokes an incremental bookmark (cheap, fast — updates the same bookmark file). Verify: `grep -c '"Stop"' ai-brain/claude-global-settings.json` ≥ 1 AND the hook runs in under 500ms on a cold cache. Test: `time bash hooks/session-bookmark.sh --incremental` completes in < 0.5s.
 
-**AC-P4.4d**: After the hook fires, `~/.claude/session-bookmarks/<session-id>.md` exists and contains: the current task list (from `TaskList` or a cached copy), plans modified this session (file paths), files edited in the last 120 minutes (`find … -mmin -120`), and any cairn/working-memory cards written this session. Verify: force a Stop event; `ls ~/.claude/session-bookmarks/*.md | wc -l` ≥ 1 AND the most recent file contains at least two of those four sections.
+**AC-P4.4d**: After the hook fires, `$HOME/.claude/session-bookmarks/<session-id>.md` exists and contains: the current task list (from `TaskList` or a cached copy), plans modified this session (file paths), files edited in the last 120 minutes (`find … -mmin -120`), and any cairn/working-memory cards written this session. Verify: force a Stop event; `ls $HOME/.claude/session-bookmarks/*.md | wc -l` ≥ 1 AND the most recent file contains at least two of those four sections.
 
-**AC-P4.4e**: `SessionStart` (`startup|resume|clear|compact` matcher) reads the most recent bookmark and emits it as additional context via stdout (the hook output is injected into the next agent turn). Verify: after a simulated /compact, the next user-prompt context contains a `## Session bookmark` section (check via SessionStart:compact hook-output capture in `~/.claude/cairn/heartbeats/session-start-output.log` or equivalent, specified by the executor based on current infra).
+**AC-P4.4e**: `SessionStart` (`startup|resume|clear|compact` matcher) reads the most recent bookmark and emits it as additional context via stdout (the hook output is injected into the next agent turn). Verify: after a simulated /compact, the next user-prompt context contains a `## Session bookmark` section (check via SessionStart:compact hook-output capture in `$HOME/.claude/cairn/heartbeats/session-start-output.log` or equivalent, specified by the executor based on current infra).
 
-**AC-P4.4f** (discipline gate, optional): `PreCompact` blocks with exit 2 if session-significance heuristics pass (≥ 20 tool calls AND ≥ 1 files edited) AND zero tier-b cards were written this session. Detection mechanism for "cards written this session": compare `tier-b/topics/**/*.md` file mtimes to the session start timestamp captured at SessionStart (write it to `~/.claude/session-bookmarks/<session-id>.start-ts`). Override: a file sentinel at `~/.claude/.compact-force` (the user creates it before re-running /compact, the hook deletes it on read). Verify: synthetic session with heavy tool use and zero cards; `/compact` exits non-zero; with sentinel present, `/compact` passes and sentinel is consumed.
+**AC-P4.4f** (discipline gate, optional): `PreCompact` blocks with exit 2 if session-significance heuristics pass (≥ 20 tool calls AND ≥ 1 files edited) AND zero tier-b cards were written this session. Detection mechanism for "cards written this session": compare `tier-b/topics/**/*.md` file mtimes to the session start timestamp captured at SessionStart (write it to `$HOME/.claude/session-bookmarks/<session-id>.start-ts`). Override: a file sentinel at `$HOME/.claude/.compact-force` (the user creates it before re-running /compact, the hook deletes it on read). Verify: synthetic session with heavy tool use and zero cards; `/compact` exits non-zero; with sentinel present, `/compact` passes and sentinel is consumed.
 
 **Ordering**: AC-P4.4 is independent of other Phase 4 ACs but conceptually precedes P4.1/P4.2 — a bookmark is the fallback for when reinforcement and cross-pollination haven't happened. Ship P4.4 early in Phase 4.
 
@@ -214,9 +214,9 @@ Given hooks can't command the agent, full card-authorship automation is impossib
 cd ~/coding_projects/ai-brain
 
 # Phase 0
-grep 'h5 .*scanned=' ~/.claude/cairn/heartbeats.log | wc -l                # Q1.1 >= 1
+grep 'h5 .*scanned=' $HOME/.claude/cairn/heartbeats.log | wc -l                # Q1.1 >= 1
 gh label list -R ziyilam3999/ai-brain --search cairn-drift | wc -l         # Q2.1 >= 1
-grep 'h6 \[gh-api-fail:' ~/.claude/cairn/heartbeats.log | wc -l            # Q2.2 >= 1
+grep 'h6 \[gh-api-fail:' $HOME/.claude/cairn/heartbeats.log | wc -l            # Q2.2 >= 1
 sed -n '/^## Stage 10/,/^## /p' skills/ship/SKILL.md | grep -c '```'       # Q3.1 >= 2
 grep -c 'WORKING_MEMORY_ROOT' claude-global-settings.json shared-hooks.json # Q3.2 >= 1
 test -d "${WORKING_MEMORY_ROOT:-$HOME/.claude/agent-working-memory}/tier-b" && echo pass
@@ -229,7 +229,7 @@ node -e "import('./cairn/bin/h5-graduate.mjs').then(m=>console.log(m.runGateChec
 
 # Phase 2
 node -e "import('./cairn/bin/h5-graduate.mjs').then(m=>console.log(m.runGateCheck({text:'---\nkind: insight\nsource-offsets:\n  - { session_id: a, line_offset: 1 }\ncreated: 2026-04-17\n---\nWhen the build fails with ETIMEDOUT on Windows, kill node processes before retrying. Recurring issue costing ~5 min each time.\n'})))"  # P2.1a -> { pass: true }
-bash ~/.claude/skills/cairn/bin/cairn learn "test insight about foo"       # P2.2a exit 0
+bash $HOME/.claude/skills/cairn/bin/cairn learn "test insight about foo"       # P2.2a exit 0
 grep -l 'kind: insight' hive-mind-persist/session-notes/*.md | wc -l       # P2.2b >= 1
 node -e "import('./cairn/lib/cluster.mjs').then(m=>console.log(m.normalizeToolFailureKey('tool-failure git branch -d feat-foo 2>&1')))"  # P2.3a deterministic key
 
@@ -238,7 +238,7 @@ ls hive-mind-persist/session-notes/archive/ 2>&1 | wc -l                    # P3
 # P3.2: semi-manual synthetic test, documented in PR
 
 # Phase 4
-tail -1 ~/.claude/cairn/find-history.jsonl | node -e "let d=''; process.stdin.on('data',c=>d+=c); process.stdin.on('end',()=>console.log(JSON.parse(d).results.length))"  # P4.1a >= 1
+tail -1 $HOME/.claude/cairn/find-history.jsonl | node -e "let d=''; process.stdin.on('data',c=>d+=c); process.stdin.on('end',()=>console.log(JSON.parse(d).results.length))"  # P4.1a >= 1
 node -e "import('./cairn/lib/classify.mjs').then(m=>{try{m.classify('---\nstatus: wrong\nkind: insight\n---\nbody');console.log('ok');}catch(e){console.log('err:'+e.code);}})"  # P4.3a ok
 ```
 

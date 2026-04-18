@@ -21,12 +21,12 @@ Either way, the log tells us exactly where to go fix it.
   hook's pocket-card output did NOT.
 - Manual invocation of `hooks/session-start.sh` via the Bash tool is clean:
   exit 0, full pocket-card stdout, node resolves fine.
-- Hook is registered in `~/.claude/settings.json` inside the third
+- Hook is registered in `$HOME/.claude/settings.json` inside the third
   `SessionStart` block, matcher `startup|resume|clear|compact`, command:
-  `WORKING_MEMORY_ROOT=/c/Users/ziyil/.claude/agent-working-memory bash /c/Users/ziyil/coding_projects/agent-working-memory/hooks/session-start.sh`
+  `WORKING_MEMORY_ROOT=$HOME/.claude/agent-working-memory bash $HOME/coding_projects/agent-working-memory/hooks/session-start.sh`
   with `timeout: 10`.
-- The other two hooks use simpler command strings (`bash ~/.claude/hooks/foo.sh`)
-  with no `VAR=val` prefix and live under `~/.claude/hooks/`.
+- The other two hooks use simpler command strings (`bash $HOME/.claude/hooks/foo.sh`)
+  with no `VAR=val` prefix and live under `$HOME/.claude/hooks/`.
 
 ## Hypotheses
 - **H1** — Hook does not fire at harness-spawned SessionStart (e.g. the
@@ -72,7 +72,7 @@ trap 'echo "exit=$? at $(date +%FT%T%z)" >> /tmp/awm-hook.log' EXIT
 1. Apply instrumentation to `hooks/session-start.sh`.
 2. `rm -f /tmp/awm-hook.log /tmp/awm-hook.stdout`.
 3. **Manual run** with the exact command string from `settings.json`:
-   `WORKING_MEMORY_ROOT=/c/Users/ziyil/.claude/agent-working-memory bash /c/Users/ziyil/coding_projects/agent-working-memory/hooks/session-start.sh >/tmp/awm-hook.stdout; echo exit=$?`
+   `WORKING_MEMORY_ROOT=$HOME/.claude/agent-working-memory bash $HOME/coding_projects/agent-working-memory/hooks/session-start.sh >/tmp/awm-hook.stdout; echo exit=$?`
 4. Check AC-T1..T3 below.
 5. Record pre-test marker: `date +%s > /tmp/awm-hook.pre`.
 6. **Harness-spawn run** via headless Claude Code:
@@ -98,12 +98,12 @@ trap 'echo "exit=$? at $(date +%FT%T%z)" >> /tmp/awm-hook.log' EXIT
 |----|----|------------|
 | ✅ | ✅ | Chain works in fresh spawn; this interactive session missed it (stale settings cache, or hook hadn't been registered yet when SessionStart fired). Fix = restart settings load / verify edit time vs session start. |
 | ✅ | ❌ | Hook fires, emits stdout, harness drops it. H3. Fix = change matcher/command shape to match the shape of the working hooks. |
-| ❌ | —  | Hook does NOT fire under harness spawn. H1/H2/H4. Fix = remove `VAR=val` prefix, wrap in `~/.claude/hooks/awm-session-start.sh`, or debug PATH/node. |
+| ❌ | —  | Hook does NOT fire under harness spawn. H1/H2/H4. Fix = remove `VAR=val` prefix, wrap in `$HOME/.claude/hooks/awm-session-start.sh`, or debug PATH/node. |
 | —  | —  | (T4 fail auto-invalidates T5; check stderr tail in `/tmp/awm-hook.log`.) |
 
 ## Out of scope
 - Any edit to `src/**` (refresh pipeline is not under test).
-- Any edit to `~/.claude/settings.json` during the test phase — settings
+- Any edit to `$HOME/.claude/settings.json` during the test phase — settings
   changes are part of the fix plan, not this one.
 - Deleting or re-seeding `$HOME/.claude/agent-working-memory/` — the store's
   contents are load-bearing user data.

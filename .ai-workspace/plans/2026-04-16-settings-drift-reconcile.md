@@ -1,4 +1,4 @@
-# Follow-up Plan — Reconcile ~/.claude/settings.json drift with ai-brain canonical
+# Follow-up Plan — Reconcile $HOME/.claude/settings.json drift with ai-brain canonical
 Date: 2026-04-16
 Status: **EXECUTED (Option Y) — closed 2026-04-16**
 Depends on: `.ai-workspace/plans/2026-04-16-awm-hook-injection-fix.md` (closed)
@@ -27,7 +27,7 @@ Option Y (the more architectural fix) was chosen over Option X (a 3-line
 canonical itself and delete the merge block entirely. Side effect: cairn
 hooks become unconditionally registered at install time regardless of
 probe verdict, but the hook scripts themselves already degrade gracefully
-when `~/.claude/cairn/` is missing, so the effective contract is unchanged.
+when `$HOME/.claude/cairn/` is missing, so the effective contract is unchanged.
 
 ## ELI5
 Claude Code reads one settings file that lives in your home folder. There's
@@ -52,17 +52,17 @@ committing the reconciled file and running a small sync script.
 
 ## Context
 - Root cause of the SessionStart-hook bug (fix plan 2026-04-16): the live
-  `~/.claude/settings.json` had a hook command in a `VAR=val bash /abs/path`
+  `$HOME/.claude/settings.json` had a hook command in a `VAR=val bash /abs/path`
   shape that the Windows hook runner couldn't parse. The canonical
   `ai-brain/claude-global-settings.json` already had the correct
-  `bash ~/.claude/hooks/…` shape. Only the live file was broken.
-- `~/.claude/settings.json` is 7341 B. `ai-brain/claude-global-settings.json`
+  `bash $HOME/.claude/hooks/…` shape. Only the live file was broken.
+- `$HOME/.claude/settings.json` is 7341 B. `ai-brain/claude-global-settings.json`
   is 5959 B. Delta ≈ 1382 B. Content of that delta has NOT been inspected
   — the earlier plan was scoped to the one hook line.
-- `~/.claude/settings.json` is a regular file, NOT a symlink
+- `$HOME/.claude/settings.json` is a regular file, NOT a symlink
   (`ls -la` earlier showed no `->` arrow; `readlink` would return empty).
 - CLAUDE.md's "Git & Sync Rules / ai-brain Sync" section currently states:
-  `ai-brain/claude-global-settings.json → ~/.claude/settings.json` ("global
+  `ai-brain/claude-global-settings.json → $HOME/.claude/settings.json` ("global
   Claude Code settings, linked by `setup.sh`"). That contradicts observed
   reality. Either `setup.sh` never ran on this machine, or `setup.sh` copies
   instead of symlinking, or something later clobbered the symlink with a
@@ -73,7 +73,7 @@ committing the reconciled file and running a small sync script.
   live file does not propagate to ai-brain. Bi-directional silent drift.
 
 ## Goal
-- The live `~/.claude/settings.json` contains content byte-identical to
+- The live `$HOME/.claude/settings.json` contains content byte-identical to
   `ai-brain/claude-global-settings.json`, OR is a filesystem link to it.
 - All currently-working behavior (cairn hook, inject-session-id hook,
   working-memory hook, skill permissions, statusline, PreToolUse hooks,
@@ -88,14 +88,14 @@ committing the reconciled file and running a small sync script.
 ## Approach
 Four steps. Each is independently verifiable and reversible.
 
-1. **Snapshot** both files: copy `~/.claude/settings.json` to
+1. **Snapshot** both files: copy `$HOME/.claude/settings.json` to
    `/tmp/awm-settings-live.snapshot.json` and `ai-brain/claude-global-settings.json`
    to `/tmp/awm-settings-canonical.snapshot.json`. Record md5s of each.
 2. **Produce a side-by-side reconciliation table.** Use `diff -u` and a
    structured JSON-key walk to classify every difference as:
    - **live-only** — exists in live, not in canonical. For each entry
      decide: (a) merge into canonical (preserve), (b) discard (was local
-     noise / accidental), (c) move to a separate `~/.claude/settings.local.json`
+     noise / accidental), (c) move to a separate `$HOME/.claude/settings.local.json`
      (Claude Code supports this per-project override for permissions
      experiments the user doesn't want in ai-brain).
    - **canonical-only** — exists in canonical, not in live. Decide: merge
@@ -107,11 +107,11 @@ Four steps. Each is independently verifiable and reversible.
    Validate JSON. No other changes.
 4. **Unify the live file with the canonical.** Two tracks, pick whichever
    works on this Windows host:
-   - **Track A (symlink, preferred).** Delete `~/.claude/settings.json`,
+   - **Track A (symlink, preferred).** Delete `$HOME/.claude/settings.json`,
      `ln -s` (with `MSYS=winsymlinks:nativestrict`) to
      `~/coding_projects/ai-brain/claude-global-settings.json`. Requires
      Windows Developer Mode enabled, OR the shell running with elevated
-     privileges. `readlink ~/.claude/settings.json` must resolve to the
+     privileges. `readlink $HOME/.claude/settings.json` must resolve to the
      canonical path.
    - **Track B (sync script + tracked copy, fallback).** If symlink
      creation fails (no dev mode, no admin, MSYS falls back to copy),
@@ -141,13 +141,13 @@ Four steps. Each is independently verifiable and reversible.
 - Rewriting CLAUDE.md's sync-rules section beyond a one-line correction
   if Track B is chosen (to reflect "copy-based on Windows hosts without
   Dev Mode").
-- Any change to `ai-brain/hooks/*.sh` or `~/.claude/hooks/*.sh`.
+- Any change to `ai-brain/hooks/*.sh` or `$HOME/.claude/hooks/*.sh`.
 - Addressing the wrapper script `working-memory-session-start.sh` being
-  a regular copy in `~/.claude/hooks/` rather than a symlink — same class
+  a regular copy in `$HOME/.claude/hooks/` rather than a symlink — same class
   of problem, but scoped separately for now.
 
 ## Critical files
-- `~/.claude/settings.json` — live, 7341 B, host file, not in any repo.
+- `$HOME/.claude/settings.json` — live, 7341 B, host file, not in any repo.
   This plan either overwrites it with reconciled content OR deletes it
   and replaces with a symlink.
 - `~/coding_projects/ai-brain/claude-global-settings.json` — canonical,
@@ -166,11 +166,11 @@ Four steps. Each is independently verifiable and reversible.
   exits `0`. (Canonical still valid JSON after merge.)
 - **AC-D3**: After step 3, every hook `command` string in the merged
   canonical file starts with a bare program token (not `VAR=val`). Check:
-  `node -e "const j=require('/c/Users/ziyil/coding_projects/ai-brain/claude-global-settings.json'); const bad=[]; for (const ev of Object.values(j.hooks||{})) for (const b of ev) for (const h of (b.hooks||[])) if (h.type==='command' && /^[A-Z_][A-Z0-9_]*=/.test(h.command)) bad.push(h.command); console.log(JSON.stringify(bad)); process.exit(bad.length?1:0)"`
+  `node -e "const j=require('$HOME/coding_projects/ai-brain/claude-global-settings.json'); const bad=[]; for (const ev of Object.values(j.hooks||{})) for (const b of ev) for (const h of (b.hooks||[])) if (h.type==='command' && /^[A-Z_][A-Z0-9_]*=/.test(h.command)) bad.push(h.command); console.log(JSON.stringify(bad)); process.exit(bad.length?1:0)"`
   exits `0` and prints `[]`.
-- **AC-D4**: After step 4 (Track A), `readlink ~/.claude/settings.json`
-  prints `/c/Users/ziyil/coding_projects/ai-brain/claude-global-settings.json`
-  (or equivalent). OR (Track B), `diff -q ~/.claude/settings.json ~/coding_projects/ai-brain/claude-global-settings.json`
+- **AC-D4**: After step 4 (Track A), `readlink $HOME/.claude/settings.json`
+  prints `$HOME/coding_projects/ai-brain/claude-global-settings.json`
+  (or equivalent). OR (Track B), `diff -q $HOME/.claude/settings.json ~/coding_projects/ai-brain/claude-global-settings.json`
   exits `0` AND `grep -c 'claude-global-settings.json' ~/coding_projects/ai-brain/scripts/setup.sh`
   is at least `1`.
 - **AC-D5**: In a fresh Claude Code session opened after step 4, the
@@ -187,9 +187,9 @@ Four steps. Each is independently verifiable and reversible.
 
 ## Rollback
 - Step 1 snapshots are the rollback. Restore via
-  `cp /tmp/awm-settings-live.snapshot.json ~/.claude/settings.json` and
+  `cp /tmp/awm-settings-live.snapshot.json $HOME/.claude/settings.json` and
   `cp /tmp/awm-settings-canonical.snapshot.json ~/coding_projects/ai-brain/claude-global-settings.json`.
-- Track A symlink can be reverted to a copy with `rm ~/.claude/settings.json && cp /tmp/awm-settings-live.snapshot.json ~/.claude/settings.json`.
+- Track A symlink can be reverted to a copy with `rm $HOME/.claude/settings.json && cp /tmp/awm-settings-live.snapshot.json $HOME/.claude/settings.json`.
 - Any ai-brain commit is a normal git revert.
 
 ## Verification procedure (for the reviewer)
@@ -248,7 +248,7 @@ Four steps. Each is independently verifiable and reversible.
 - AC-D7 ✅ (ai-brain `git status` shows exactly 2 modified files: `claude-global-settings.json` + `scripts/setup.sh`; committed cleanly)
 
 ## Deferred to post-merge
-- Re-run `bash ~/coding_projects/ai-brain/scripts/setup.sh` after PR #309 merges. Expected: step 5 reports `[ok] ~/.claude/settings.json -> <canonical>` (no re-link needed because the HardLink already matches); step 8 runs mkdir + probe, no merge, no clobber. This proves the new setup.sh is idempotent and the HardLink survives repeat runs.
+- Re-run `bash ~/coding_projects/ai-brain/scripts/setup.sh` after PR #309 merges. Expected: step 5 reports `[ok] $HOME/.claude/settings.json -> <canonical>` (no re-link needed because the HardLink already matches); step 8 runs mkdir + probe, no merge, no clobber. This proves the new setup.sh is idempotent and the HardLink survives repeat runs.
 - If at any point the HardLink is broken (by an editor that rewrites instead of in-place-edits settings.json, by a Claude Code upgrade that replaces it, etc.), just re-run setup.sh — step 5 will rebuild.
 
 Last updated: 2026-04-16
