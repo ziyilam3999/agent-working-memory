@@ -16,7 +16,8 @@
 // is the only place those mentions may live.
 
 import { readdirSync, readFileSync, statSync } from "node:fs";
-import { join, relative, sep } from "node:path";
+import { join, relative, sep, isAbsolute } from "node:path";
+import { execFileSync } from "node:child_process";
 
 const ALLOWLIST = new Set([
   "src/hygiene.mjs",
@@ -72,8 +73,33 @@ export function scanFile(path, relPath) {
   return violations;
 }
 
+// Return tracked files under `root` as absolute paths, or null if `root` is
+// not inside a git repo (e.g., the tmp-dir seeded-probe test). The hygiene
+// scanner's contract is "committed repo tree is clean", so we ask git what
+// belongs to the committed tree rather than walking the filesystem and
+// sweeping up untracked WIP.
+function listTrackedFiles(root) {
+  let out;
+  try {
+    out = execFileSync("git", ["ls-files", "-z"], {
+      cwd: root,
+      stdio: ["ignore", "pipe", "ignore"],
+      maxBuffer: 64 * 1024 * 1024,
+    });
+  } catch {
+    return null;
+  }
+  const text = out.toString("utf8");
+  if (text.length === 0) return [];
+  return text
+    .split("\0")
+    .filter(Boolean)
+    .map(rel => (isAbsolute(rel) ? rel : join(root, rel)));
+}
+
 export function scanTree(root) {
-  const files = walk(root);
+  const tracked = listTrackedFiles(root);
+  const files = tracked !== null ? tracked : walk(root);
   const all = [];
   for (const f of files) {
     const rel = relative(root, f).split(sep).join("/");
