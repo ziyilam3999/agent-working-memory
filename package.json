@@ -1,6 +1,6 @@
 {
   "name": "agent-working-memory",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "Two-tier decision memory for Claude Code: Tier A pocket card + Tier B decision library.",
   "type": "module",
   "bin": {
