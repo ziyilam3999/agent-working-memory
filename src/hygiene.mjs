@@ -91,11 +91,15 @@ function listTrackedFiles(root) {
       maxBuffer: 64 * 1024 * 1024,
     });
   } catch (err) {
-    // Expected: root is not a git repo (git exits 128) or git binary missing
-    // (ENOENT). Unexpected: ls-files output exceeded maxBuffer on a huge repo
-    // or some other failure — surface that, because a silent fallback to walk()
-    // re-introduces untracked-WIP sweeps, defeating the purpose of this path.
-    if (err && err.status !== 128 && err.code !== "ENOENT") {
+    // Expected: root is not a git repo (git exits 128), git binary missing
+    // (ENOENT), cross-platform spawn permission/path failures (EACCES/EPERM),
+    // or signal-killed child (err.status === null). Unexpected: ls-files output
+    // exceeded maxBuffer on a huge repo or some other failure — surface that,
+    // because a silent fallback to walk() re-introduces untracked-WIP sweeps,
+    // defeating the purpose of this path.
+    const expectedStatus = err && [128, null].includes(err.status);
+    const expectedCode = err && ["ENOENT", "EACCES", "EPERM"].includes(err.code);
+    if (err && !expectedStatus && !expectedCode) {
       process.stderr.write(`hygiene: listTrackedFiles fell back to walk (${err.code || err.message})\n`);
     }
     return null;
