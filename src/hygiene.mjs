@@ -81,16 +81,30 @@ export function scanFile(path, relPath) {
 function listTrackedFiles(root) {
   let out;
   try {
+    // `git ls-files -z` without --recurse-submodules returns submodule gitlinks
+    // as directory paths whose readFileSync will throw in scanFile (swallowed).
+    // Acceptable while this repo has no submodules; add --recurse-submodules if
+    // one is introduced later.
     out = execFileSync("git", ["ls-files", "-z"], {
       cwd: root,
       stdio: ["ignore", "pipe", "ignore"],
       maxBuffer: 64 * 1024 * 1024,
     });
-  } catch {
+  } catch (err) {
+    // Expected: root is not a git repo (git exits 128) or git binary missing
+    // (ENOENT). Unexpected: ls-files output exceeded maxBuffer on a huge repo
+    // or some other failure — surface that, because a silent fallback to walk()
+    // re-introduces untracked-WIP sweeps, defeating the purpose of this path.
+    if (err && err.status !== 128 && err.code !== "ENOENT") {
+      process.stderr.write(`hygiene: listTrackedFiles fell back to walk (${err.code || err.message})\n`);
+    }
     return null;
   }
   const text = out.toString("utf8");
   if (text.length === 0) return [];
+  // git ls-files output is always repo-relative; the isAbsolute guard is
+  // defensive against future git behaviour and takes the join branch for
+  // every path today.
   return text
     .split("\0")
     .filter(Boolean)
