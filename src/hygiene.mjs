@@ -100,7 +100,7 @@ function listTrackedFiles(root) {
     const expectedStatus = err && [128, null].includes(err.status);
     const expectedCode = err && ["ENOENT", "EACCES", "EPERM"].includes(err.code);
     if (err && !expectedStatus && !expectedCode) {
-      process.stderr.write(`hygiene: listTrackedFiles fell back to walk (${err.code || err.message})\n`);
+      process.stderr.write(`hygiene: listTrackedFiles fell back to walk (${err.code || 'error'}: ${err.message})\n`);
     }
     return null;
   }
