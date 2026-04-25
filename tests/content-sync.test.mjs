@@ -11,7 +11,8 @@
 //   - B7 a/b/c/d freshness branches for src/refresh.mjs fragment include
 //
 // All tests use isolated tmp dirs and the env-var seams documented in
-// scripts/content-sync.mjs and src/refresh.mjs. None touch ~/.claude/.
+// scripts/content-sync.mjs and src/refresh.mjs. None touch the user's
+// real Claude home directory.
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
