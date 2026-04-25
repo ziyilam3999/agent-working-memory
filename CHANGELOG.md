@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.0](https://github.com/ziyilam3999/agent-working-memory/compare/v0.1.4...v0.2.0) (2026-04-25)
+
+### Features
+
+* **content-sync:** auto-sync pinned tier-b cards to the private content-repo backup. New `scripts/content-sync.mjs` (dry-run + full-run modes), filter predicate at `scripts/lib/content-filter.mjs`, four new tests covering filter / hash-edit detection / idempotency / non-pinned exclusion. PM2 entry `working-memory-content-sync` in new `ecosystem.config.cjs` runs daily at 04:30 local. `npm run sync` is the manual escape hatch. Failure path writes a single-line record to `<clone>/.last-sync-error.log` and exits non-zero. PR B of the memory-status pass — closes plan `.ai-workspace/plans/2026-04-25-memory-status-pass.md` ACs B1-B10.
+* **refresh:** consume the Cairn status fragment (PR A producer) and embed the `## Memory liveness` panel in tier-a.md with four-branch graceful behavior — fresh / absent / malformed / stale. Freshness window: 8h, matching H7's cron cadence.
+
 ## [0.1.4](https://github.com/ziyilam3999/agent-working-memory/compare/v0.1.3...v0.1.4) (2026-04-20)
 
 ### Miscellaneous
