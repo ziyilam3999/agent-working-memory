@@ -108,7 +108,13 @@ function listTrackedFiles(root) {
   if (text.length === 0) return [];
   // git ls-files output is always repo-relative; the isAbsolute guard is
   // defensive against future git behaviour and takes the join branch for
-  // every path today.
+  // every path today. A concrete scenario that would flip it: invoking
+  // `git ls-files --full-name` from a subdirectory with an absolute `cwd`
+  // on a hypothetical future git that emits worktree-absolute paths (today
+  // even --full-name stays repo-relative), or a git plumbing change that
+  // resolves paths through a bind-mount whose canonical form is absolute.
+  // Safe to remove once we pin a git version whose ls-files contract
+  // guarantees repo-relative output in writing.
   return text
     .split("\0")
     .filter(Boolean)
