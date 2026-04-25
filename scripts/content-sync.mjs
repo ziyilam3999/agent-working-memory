@@ -302,7 +302,8 @@ function pullRebaseWithRetry(cloneRoot, branch, budget, log) {
       log(`pull --rebase attempt ${attempt}/${budget} failed: ${err.message?.split("\n")[0]}`);
     }
   }
-  throw lastErr || new Error("pull --rebase failed after retries");
+  if (lastErr) throw new Error(`rebase-failed: ${lastErr.message}`);
+  throw new Error("rebase-failed: pull --rebase failed after retries");
 }
 
 // ---------------------------------------------------------------------------
