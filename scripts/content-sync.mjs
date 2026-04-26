@@ -251,7 +251,7 @@ export function computePlan(tierBRoot, cloneRoot) {
 // Apply plan to the local clone working tree. Returns the list of touched
 // rel-paths (so the caller can `git add` them explicitly — never `git add -A`).
 
-function applyPlan(actions, tierBRoot, cloneRoot, opts) {
+function applyPlan(actions, tierBRoot, cloneRoot) {
   const touched = [];
   for (const a of actions) {
     if (a.kind === "SKIP-FILTER") continue;
@@ -386,7 +386,7 @@ export async function runSync(opts = {}) {
 
     const actions = computePlan(tierBRoot, cloneRoot);
     const realActions = actions.filter((a) => a.kind !== "SKIP-FILTER");
-    const touched = applyPlan(actions, tierBRoot, cloneRoot, opts);
+    const touched = applyPlan(actions, tierBRoot, cloneRoot);
 
     if (touched.length === 0) {
       log("no delta — idempotent no-op");
