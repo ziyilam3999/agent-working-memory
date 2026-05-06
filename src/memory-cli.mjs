@@ -6,6 +6,8 @@ import { refresh, resolveRoot } from "./refresh.mjs";
 import { writeCard } from "./write-card.mjs";
 import { scanTree } from "./hygiene.mjs";
 import { loadCards, compact } from "./compact.mjs";
+import { main as migrateOutMain } from "../scripts/migrate-out.mjs";
+import { main as migrateInMain } from "../scripts/migrate-in.mjs";
 import { join } from "node:path";
 
 const [, , sub, ...rest] = process.argv;
@@ -19,6 +21,17 @@ subcommands:
   write --topic T --id I --title S [--pinned] [--root R]
                                     create a new tier-b card
   hygiene [ROOT]                    scan ROOT for hygiene violations (default .)
+  migrate-out [--target-branch N] [--include-non-pinned] [--dry-run]
+                                    bundle local tier-b into a transport branch
+                                    on the content backup repo (default branch:
+                                    migration/<host-id>-<YYYY-MM-DD>; default
+                                    filter: pinned only). Refuses to write to
+                                    'main'/'master'. Privacy denylist pre-flight.
+  migrate-in [--from-branch N] [--strategy S] [--dry-run]
+                                    apply a transport branch into local tier-b.
+                                    strategy ∈ {prefer-local, prefer-remote,
+                                    prefer-newer-commit}; default
+                                    prefer-newer-commit (untracked-local wins).
   help                              show this message
 `);
 }
@@ -36,7 +49,7 @@ function parseKV(argv) {
   return out;
 }
 
-try {
+async function dispatch() {
   switch (sub) {
     case "refresh": {
       const kv = parseKV(rest);
@@ -73,6 +86,16 @@ try {
       for (const x of v) process.stderr.write(`${x.file}:${x.line} [${x.pattern}]\n`);
       process.exit(1);
     }
+    case "migrate-out": {
+      // Delegate parsing to the migrate-out module's own CLI parser so the
+      // top-level dispatcher stays thin.
+      const code = await migrateOutMain(rest);
+      process.exit(code || 0);
+    }
+    case "migrate-in": {
+      const code = await migrateInMain(rest);
+      process.exit(code || 0);
+    }
     case undefined:
     case "help":
     case "-h":
@@ -83,7 +106,9 @@ try {
       help();
       process.exit(2);
   }
-} catch (e) {
+}
+
+dispatch().catch((e) => {
   process.stderr.write(`error: ${e.message}\n`);
   process.exit(1);
-}
+});
