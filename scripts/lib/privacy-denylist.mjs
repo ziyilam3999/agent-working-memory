@@ -7,10 +7,9 @@
 //     (added 2026-04-17): never write the user's current employer's brand
 //     name (or common spellings / variants), or any award / specific metric
 //     that single-sources that employer.
-//   - C:/Users/ziyil/.claude/projects/.../memory/feedback_no_employer_mention.md
-//     — concrete substitutes / variants list ("UOB", "UOB Bank",
-//     "UOB Group", "UOB Mighty", and metric/award single-source
-//     identifiers).
+//   - per-project Claude memory feedback card "no_employer_mention" — the
+//     concrete substitutes / variants list (bare brand, brand+qualifier
+//     forms, single-source award metric).
 //   - Plan §"Privacy denylist seam" (2026-05-05) — case-insensitive,
 //     covers brand variants + common spellings; AC-9b mandates a separate
 //     test case for the variant surface.
