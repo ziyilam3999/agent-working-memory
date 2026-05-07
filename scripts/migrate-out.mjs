@@ -47,7 +47,7 @@ import {
   listTierBCards,
   isPinned,
 } from "./lib/migration-bundle.mjs";
-import { findFirstMatch } from "./lib/privacy-denylist.mjs";
+import { findFirstMatch, RULE_SPEC_ALLOWLIST } from "./lib/privacy-denylist.mjs";
 
 const DEFAULT_REMOTE = "https://github.com/ziyilam3999/agent-working-memory-content.git";
 
@@ -184,6 +184,11 @@ function checkoutTargetBranch(cloneRoot, branch) {
 export function privacyPreflight(cards) {
   const violations = [];
   for (const card of cards) {
+    // Rule-spec allowlist: a tiny set of cards LEGITIMATELY carry the
+    // regulated token because they ARE the rule (parent-claude.md
+    // privacy spec exemption clause). Skip the scan entirely for those
+    // exact paths. Path-pinned — see RULE_SPEC_ALLOWLIST docstring.
+    if (RULE_SPEC_ALLOWLIST.has(card.relPath)) continue;
     let text;
     try { text = readFileSync(card.absPath, "utf8"); } catch { continue; }
     const hit = findFirstMatch(text);
