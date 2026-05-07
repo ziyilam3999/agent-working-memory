@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.4.0](https://github.com/ziyilam3999/agent-working-memory/compare/v0.3.0...v0.4.0) (2026-05-07)
+
+### Bug Fixes
+
+* **migrate-in:** replace `Infinity` fallback in `getFileCommitTime` with filesystem-mtime lookup (`getFileMtimeSeconds`) when local tier-b is NOT inside a git repo. The pre-fix behavior caused `--strategy prefer-newer-commit` to silently degenerate to `prefer-local` on user-machine tier-b roots (every local card resolved to `Infinity` regardless of actual freshness, masking legitimately-newer remote edits on round-trip drains). Pairs with a new `utimesSync` stamp during migrate-in's copy step that aligns each copied file's mtime to the source commit's `committed_date`, so subsequent migrate-ins compare honest values. Evolves AC-6b's implementation while preserving its intent: a freshly-edited local card (mtime > remote-ct) still wins; a stale local copy correctly loses ([#30](https://github.com/ziyilam3999/agent-working-memory/pull/30)).
+
+### Tests
+
+* **migrate.test.mjs:** AC-6b updated to explicitly stamp local mtime fresh (was timing-dependent under the new semantic). Four new cases — AC-6c (stale-local-loses-to-fresh-remote), AC-6d (mtime stamp ±1s), AC-6e (round-trip honesty), AC-6f (local-only short-circuit regression guard). 30/30 migrate tests pass; 59/59 full suite ([#30](https://github.com/ziyilam3999/agent-working-memory/pull/30)).
+
 ## [0.3.0](https://github.com/ziyilam3999/agent-working-memory/compare/v0.2.0...v0.3.0) (2026-05-07)
 
 ### Features
