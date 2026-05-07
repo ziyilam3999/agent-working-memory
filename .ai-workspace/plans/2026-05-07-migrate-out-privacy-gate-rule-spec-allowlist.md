@@ -2,9 +2,9 @@
 
 ## ELI5
 
-Today we tried to move 97 Windows-side memory cards to macbook via `memory migrate-out`. It refused because two cards (`topics/privacy/no-employer-brand.md` and `topics/privacy/no-linkedin-on-github.md`) contain the regulated employer-brand token "UOB". 
+Today we tried to move 97 Windows-side memory cards to macbook via `memory migrate-out`. It refused because two cards (`topics/privacy/no-employer-brand.md` and `topics/privacy/no-linkedin-on-github.md`) contain the regulated employer-brand token (`<bare-token>`).
 
-That's expected — those cards INTENTIONALLY carry the token, because they ARE the rules that say "don't write UOB anywhere else." Per parent-claude.md's privacy spec: "rule-spec files (the privacy card + per-project `feedback_no_employer_mention.md`) intentionally carry the token; no other file is exempt."
+That's expected — those cards INTENTIONALLY carry the token, because they ARE the rules that say "don't write `<bare-token>` anywhere else." Per parent-claude.md's privacy spec: "rule-spec files (the privacy card + per-project `feedback_no_employer_mention.md`) intentionally carry the token; no other file is exempt."
 
 The migrate-out CLI doesn't know about that exemption. It does the right thing for every other card, but it false-blocks on the rule-spec cards.
 
@@ -25,7 +25,7 @@ We need migrate-out to push Windows-side cards to macbook before Windows decommi
 - macbook has 305 cards (post-AC-3 PASS this session); content-sync from macbook → backup repo is one-way, so Windows-only cards never reach macbook via content-sync.
 - migrate-out is the bridge: bundle Windows-side delta into a `migration/<host>-<date>` branch; macbook then `migrate-in` from it.
 - migrate-out has a privacy gate (`scripts/lib/privacy-denylist.mjs`) that scans every card for regulated tokens. Per AC-9b of the original migrate-in/out plan, gate is hard-block — refuses to push on any match.
-- Two `topics/privacy/*.md` rule-spec cards LEGITIMATELY carry "UOB" because they document the very rule that bans the token. parent-claude.md's privacy spec carves them out as the only exemption.
+- Two `topics/privacy/*.md` rule-spec cards LEGITIMATELY carry the regulated token because they document the very rule that bans it. parent-claude.md's privacy spec carves them out as the only exemption.
 - migrate-out doesn't know about the carve-out; treats them like any other card. Result: every migrate-out from this host blocks until those cards are removed (which they shouldn't be — they're the rule).
 
 This blocks not just today's drain — every future migrate-out on any host that has the rule-spec cards (which is every host, since those cards are universal). The bug applies to macbook → backup migrations too if macbook ever runs migrate-out.
@@ -42,7 +42,7 @@ This blocks not just today's drain — every future migrate-out on any host that
 
 - **AC-2: migrate-out skips allowlisted files.** `scripts/migrate-out.mjs` consults `RULE_SPEC_ALLOWLIST` before calling `findFirstMatch` per card. If `card.relPath` is in the allowlist, the card is admitted without privacy scan. All other cards are scanned as before.
 
-  Verifier: with the rule-spec cards present on disk + a third card containing "UOB" that is NOT in the allowlist, `migrate-out --dry-run --verbose` exits non-zero AND the rejection mentions ONLY the third card (not the two allowlisted ones).
+  Verifier: with the rule-spec cards present on disk + a third card containing the regulated token that is NOT in the allowlist, `migrate-out --dry-run --verbose` exits non-zero AND the rejection mentions ONLY the third card (not the two allowlisted ones).
 
 - **AC-3: real-world drain works on Windows.** From the current Windows host (97 pinned cards in delta, two rule-spec cards present), `memory migrate-out --dry-run --verbose` completes and prints the would-push card list without `PRIVACY-BLOCK`. After ship: `memory migrate-out` (no --dry-run) creates branch `migration/<host-id>-2026-05-07` on `agent-working-memory-content` containing the delta.
 
@@ -50,13 +50,13 @@ This blocks not just today's drain — every future migrate-out on any host that
 
 - **AC-4: hostile-input regression test (with fixture-circularity guard).** Test fixture: a fake card at a non-allowlisted path containing the regulated token still trips the privacy gate. Test fixture: a card AT one of the allowlisted paths still triggers privacy match in `findFirstMatch` (so the underlying scanner isn't accidentally weakened) but is NOT rejected by migrate-out.
 
-  **Fixture-circularity guard (same lesson ai-brain hit in Stage 5.6 pre-compact card 2026-05-06):** the test file MUST NOT contain the regulated token as a contiguous source-level string — otherwise the test file IS itself the leak the gate exists to catch (and would trip a future cross-repo scan). Solution: build the regulated test string at runtime via concatenation or `String.fromCharCode` (e.g., `"U" + "O" + "B"`, `Buffer.from([85,79,66]).toString()`). The DENYLIST_PATTERNS regex still matches the runtime-built string, but `git grep UOB tests/` in the agent-working-memory repo returns zero hits.
+  **Fixture-circularity guard (same lesson ai-brain hit in Stage 5.6 pre-compact card 2026-05-06):** the test file MUST NOT contain the regulated token as a contiguous source-level string — otherwise the test file IS itself the leak the gate exists to catch (and would trip a future cross-repo scan). Solution: build the regulated test string at runtime via concatenation or `String.fromCharCode` (e.g., concatenated chars 85/79/66, or `Buffer.from([85,79,66]).toString()`). The DENYLIST_PATTERNS regex still matches the runtime-built string, but a grep for the literal token across `tests/` returns zero hits.
 
-  Verifier: (a) test runner exits 0 with the new test cases; (b) `git grep -nE 'UOB|U\.O\.B|Best Foreign Bank' tests/` returns zero hits AFTER the test file lands.
+  Verifier: (a) test runner exits 0 with the new test cases; (b) `git grep -nE '<bare-token>|<spaced-bare-token>|<award-name-prefix>' tests/` (with the placeholders expanded to their literal regulated forms) returns zero hits AFTER the test file lands.
 
 - **AC-5: allowlist is path-pinned, not glob-pinned.** `RULE_SPEC_ALLOWLIST` uses exact-string equality — no `topics/privacy/*` wildcards. This prevents a future card under `topics/privacy/` (e.g., a newly-written rule that doesn't actually need the regulated token) from sneaking past the gate.
 
-  Verifier: a hypothetical fixture card at `topics/privacy/some-other-card.md` containing "UOB" SHOULD be rejected (because it's not in the literal allowlist). Test asserts this.
+  Verifier: a hypothetical fixture card at `topics/privacy/some-other-card.md` containing the regulated token SHOULD be rejected (because it's not in the literal allowlist). Test asserts this.
 
 - **AC-6: macOS portability.** All AC-1 through AC-5 verifiers pass when the test suite runs under macOS bash 3.2 (already a CI gate via `bash-3.2-lint.yml` — no new portability surface added by this change since it's pure ES module code).
 
