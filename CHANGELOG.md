@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.3.0](https://github.com/ziyilam3999/agent-working-memory/compare/v0.2.0...v0.3.0) (2026-05-07)
+
+### Features
+
+* **cli:** add `memory migrate-out` / `memory migrate-in` for cross-machine portability of the tier-b card library. Bundle local pinned cards into a `migration/<host-id>-<date>` branch on the content backup repo (out), then apply that branch onto a fresh host with conflict resolution strategies (in). Includes privacy pre-flight, byte-equal round-trip, host-id stability, and `--include-non-pinned` widen flag ([#27](https://github.com/ziyilam3999/agent-working-memory/pull/27)).
+
+### Bug Fixes
+
+* **migrate-out:** privacy gate respects rule-spec allowlist — admit the two `topics/privacy/*` cards that LEGITIMATELY carry the regulated employer-brand token (per parent-claude.md privacy spec exemption), while still blocking every other card. Path-pinned (NOT glob-pinned), 2-entry hardcoded `RULE_SPEC_ALLOWLIST`. Mirrors ai-brain Stage 5.6 pattern. Also remediates pre-existing fixture-circularity in `tests/migrate.test.mjs` (regulated tokens now built at runtime via `String.fromCharCode` so a cross-repo grep over `tests/` returns zero hits) ([#28](https://github.com/ziyilam3999/agent-working-memory/pull/28)).
+
+### Miscellaneous
+
+* **applyPlan:** drop unused `opts` parameter ([#26](https://github.com/ziyilam3999/agent-working-memory/pull/26)).
+* **classifyError:** polish `'rebase-failed'` token coverage ([#25](https://github.com/ziyilam3999/agent-working-memory/pull/25)).
+
 ## [0.2.0](https://github.com/ziyilam3999/agent-working-memory/compare/v0.1.4...v0.2.0) (2026-04-25)
 
 ### Features
