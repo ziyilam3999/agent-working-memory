@@ -1,0 +1,9 @@
+{
+  "upstream_repo": "https://github.com/ziyilam3999/agent-working-memory.git",
+  "upstream_commit": "641d026556e6098073061af9cea88bc690aa1368",
+  "upstream_path": "scripts/lib/privacy-denylist.mjs",
+  "vendored_at": "2026-05-07",
+  "vendored_path": "lib/privacy-denylist.mjs",
+  "sha256": "f424e3076dc25b9a22a4ced72a08bd6ec1ad3eb0143e9680be67d654fea8ff9b",
+  "_self_vendor_note": "agent-working-memory IS the source of privacy-denylist.mjs. This is a self-vendor: lib/ is the gate-runner copy at the canonical /ship Stage 5.6 path; scripts/lib/ is the canonical source. To re-vendor after editing the source: cp scripts/lib/privacy-denylist.mjs lib/privacy-denylist.mjs && shasum -a 256 lib/privacy-denylist.mjs (update sha256) && bump upstream_commit + vendored_at."
+}
