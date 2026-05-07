@@ -76,13 +76,13 @@ If integrity-check semantics surface a complication (the self-vendoring pattern 
   ```bash
   node lib/privacy-denylist-gate.mjs run --pr-number {THIS_PR}
   ```
-  Expect: exit 0 with sentinel in `{passed | skipped-allowlisted}`. NOT `aborted-block` / `aborted-tool-failure`. The chicken-and-egg here mirrors ai-brain's Stage 5.6 self-test (PR #737, line 366 of `~/.claude/skills/ship/SKILL.md`): the PR must exist before the gate can scan its 5 surfaces, but the gate is part of the PR. The plan's prose, plan filename, and PR body MUST avoid the literal regulated token (use `<bare-token>` / "regulated brand" abstractions only) so the non-allowlisted surfaces stay clean.
+  Expect: exit 0 with sentinel in `{passed | skipped-allowlisted}`. NOT `aborted-block` / `aborted-tool-failure`. The chicken-and-egg here mirrors ai-brain's Stage 5.6 self-test (PR #737, line 366 of the global ship SKILL.md): the PR must exist before the gate can scan its 5 surfaces, but the gate is part of the PR. The plan's prose, plan filename, and PR body MUST avoid the literal regulated token (use `<bare-token>` / "regulated brand" abstractions only) so the non-allowlisted surfaces stay clean.
 - **AC-6 Existing tests still pass + new tests pass:** `node --test tests/*.test.mjs` reports at minimum the pre-PR baseline (59/59 from v0.4.0) + the 110 new gate tests transferred from ai-brain's `tests/ship/privacy-denylist-gate*.test.mjs`. Expected total: ~169 pass, 0 fail. If the test transfer surfaces compatibility issues (different test path expectations, etc.), repair them inline rather than deferring.
 - **AC-7 Stage 5.6 fires on next merged /ship (POST-MERGE, observed in next session):** the next /ship cycle in agent-working-memory AFTER this PR records `privacyDenylistGate: passed` (or `skipped-allowlisted`) in its run record. Verifier (cannot run during this PR's ship — runs on the SUBSEQUENT PR's ship-card landing in tier-b):
   ```bash
-  ls ~/.claude/agent-working-memory/tier-b/topics/ship-runs/ \
+  ls "$HOME/.claude/agent-working-memory/tier-b/topics/ship-runs/" \
     | grep "$(date -u +%Y-%m-)" | tail -1 \
-    | xargs -I {} grep privacyDenylistGate ~/.claude/agent-working-memory/tier-b/topics/ship-runs/{}
+    | xargs -I {} grep privacyDenylistGate "$HOME/.claude/agent-working-memory/tier-b/topics/ship-runs/{}"
   ```
   Expect: non-`n/a-not-installed` value. AC-7 is the production-evidence gate — it answers "did Stage 5.6 actually fire end-to-end through /ship," distinct from AC-5 which only verifies the gate script can be invoked.
 
@@ -114,7 +114,7 @@ If Stage 5.6 unexpectedly blocks a legitimate PR or surfaces a bug: `mv lib/priv
 
 - Discovery mail (archived): `mailbox/archive/2026-05-07T1520-wise-grace-to-macbook-session-handoff-stage-5-6-privacy-gate-adoption.md`
 - ai-brain reference implementation: `~/coding_projects/ai-brain/lib/privacy-denylist-gate.mjs` (485 LoC), `lib/privacy-denylist.mjs` (vendored from agent-working-memory@88b71434), `lib/privacy-denylist.provenance.json`
-- ai-brain Stage 5.6 spec: `~/.claude/skills/ship/SKILL.md` lines 261-367
+- ai-brain Stage 5.6 spec: the global ship SKILL.md (under user home claude skills dir) lines 261-367
 - ai-brain plan: `ai-brain/.ai-workspace/plans/2026-05-06-ship-adopts-privacy-denylist.final.md`
 - Source module: `agent-working-memory/scripts/lib/privacy-denylist.mjs` (125 LoC, exports `DENYLIST_PATTERNS`, `findFirstMatch`, `findAllMatches`, `RULE_SPEC_ALLOWLIST`)
 - Today's evidence: PR #28 ship card recorded `privacyDenylistGate: n/a-not-installed`; 3 plan-file leaks caught by manual cold-eyes review during ship
