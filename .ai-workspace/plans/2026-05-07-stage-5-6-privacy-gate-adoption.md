@@ -4,7 +4,7 @@
 
 ## ELI5
 
-`/ship` (the global PR-merge pipeline) has a step called Stage 5.6. It scans 5 surfaces of every PR — body, title, commit messages, branch name, diff content — for the regulated employer-brand token. If it finds one, the merge is blocked. This catches the "I accidentally pasted UOB into a plan file" class of mistake automatically.
+`/ship` (the global PR-merge pipeline) has a step called Stage 5.6. It scans 5 surfaces of every PR — body, title, commit messages, branch name, diff content — for the regulated employer-brand token. If it finds one, the merge is blocked. This catches the "I accidentally pasted the bare 3-letter brand token into a plan file" class of mistake automatically.
 
 For Stage 5.6 to fire, /ship looks for a script at `<repo>/lib/privacy-denylist-gate.mjs`. ai-brain has it. agent-working-memory does NOT — so today's PR #28 ship card showed `privacyDenylistGate: n/a-not-installed` and the gate skipped. Three plan-file leaks of the regulated token went uncaught by mechanism and were caught only by the executor's manual judgment during PR #28 ship review.
 
