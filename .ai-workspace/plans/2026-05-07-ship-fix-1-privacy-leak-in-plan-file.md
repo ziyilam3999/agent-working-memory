@@ -12,9 +12,10 @@ Rewrite the plan + PR body to use placeholder vocabulary (`<bare-token>`,
 
 ## Binary AC
 
-- **AC-1**: `git grep -nE 'UOB|U\.O\.B|Best Foreign Bank' .ai-workspace/plans/`
+- **AC-1**: `git grep` for the regulated tokens (literal forms expanded
+  at audit time, NOT embedded in this file) across `.ai-workspace/plans/`
   returns zero hits AFTER the edit.
-- **AC-2**: `gh pr view 28 --json body | grep -E 'UOB|U\.O\.B|Best Foreign Bank'`
-  returns zero hits AFTER the body edit.
+- **AC-2**: same grep against `gh pr view 28 --json body` returns zero
+  hits AFTER the body edit.
 - **AC-3**: Plan file remains semantically correct (grep verifier strings
   are still self-describing — `<bare-token>` is unambiguous).
