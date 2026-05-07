@@ -25,6 +25,9 @@ const ALLOWLIST = new Set([
   "docs/hygiene.md",
   "scripts/p1-acceptance.sh",
   "README.md",
+  // Vendored /ship Stage 5.6 gate: references the runtime override audit log
+  // path it writes to. Intentional — see lib/privacy-denylist.provenance.json.
+  "lib/privacy-denylist-gate.mjs",
 ]);
 
 const SKIP_DIRS = new Set([".git", "node_modules", ".vscode", ".idea"]);
