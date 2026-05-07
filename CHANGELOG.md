@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.5.0](https://github.com/ziyilam3999/agent-working-memory/compare/v0.4.0...v0.5.0) (2026-05-07)
+
+### Features
+
+* **ship:** adopt /ship Stage 5.6 mechanical privacy gate via self-vendor pattern. New `lib/privacy-denylist-gate.mjs` (485 LoC, copied from ai-brain) + `lib/privacy-denylist.mjs` (byte-for-byte vendored from `scripts/lib/`) + `lib/privacy-denylist.provenance.json` (self-referencing). Stage 5.6 now fires on every agent-working-memory PR, scanning 5 surfaces (PR body, title, commit messages, branch name, diff content) for the regulated employer-brand token. Includes a default-branch detection adaptation (gate works on `main` not just `master`) via `git symbolic-ref refs/remotes/origin/HEAD` with a `master` safety fallback. 110 tests transferred from ai-brain (`tests/privacy-denylist-gate*.test.mjs`); total suite 169/169 pass (was 59) ([#32](https://github.com/ziyilam3999/agent-working-memory/pull/32)).
+
+### Bug Fixes
+
+* **hygiene:** allowlist `lib/privacy-denylist-gate.mjs` for the `claude-home-ref` pattern. The vendored gate intentionally references the runtime override audit log path it writes to ([#32](https://github.com/ziyilam3999/agent-working-memory/pull/32)).
+
 ## [0.4.0](https://github.com/ziyilam3999/agent-working-memory/compare/v0.3.0...v0.4.0) (2026-05-07)
 
 ### Bug Fixes
