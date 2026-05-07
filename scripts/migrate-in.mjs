@@ -27,6 +27,7 @@ import {
   existsSync,
   readdirSync,
   statSync,
+  utimesSync,
 } from "node:fs";
 import { join, dirname, sep, relative } from "node:path";
 import { homedir } from "node:os";
@@ -34,6 +35,7 @@ import { execFileSync } from "node:child_process";
 
 import {
   getFileCommitTime,
+  getFileMtimeSeconds,
   resolveStrategy,
 } from "./lib/migration-bundle.mjs";
 
@@ -196,7 +198,11 @@ function listMdFilesUnder(root) {
 // --------------------------------------------------------------------
 // Decision: per-relPath, where does the winning bytes come from?
 
-export function planMerge({ localTierBRoot, remoteTierBRoot, localGitDir, remoteGitDir, strategy }) {
+// localGitRoot may be null. When non-null, local-ct comes from `git log` on
+// that repo (tier-b/ inside a git working tree — the test-harness shape).
+// When null, tier-b is plain files (the production shape) and local-ct
+// comes from filesystem mtime via getFileMtimeSeconds.
+export function planMerge({ localTierBRoot, remoteTierBRoot, localGitRoot, remoteGitDir, strategy }) {
   // Forward-slash relPath under tier-b/ (matches content-sync convention).
   const localFiles = new Map(); // relPath -> absPath
   for (const f of listMdFilesUnder(join(localTierBRoot, "topics"))) {
@@ -222,8 +228,14 @@ export function planMerge({ localTierBRoot, remoteTierBRoot, localGitDir, remote
       decisions.push({ relPath: rel, action: "keep-local", reason: "remote-missing" });
       continue;
     }
-    // Both present — strategy resolves.
-    const localCt = getFileCommitTime(localGitDir, join("tier-b", rel).split(sep).join("/"));
+    // Both present — strategy resolves. Pick local-ct lookup based on
+    // whether tier-b is inside a git repo: git log when yes, mtime when no.
+    let localCt;
+    if (localGitRoot) {
+      localCt = getFileCommitTime(localGitRoot, join("tier-b", rel).split(sep).join("/"));
+    } else {
+      localCt = getFileMtimeSeconds(localFiles.get(rel));
+    }
     const remoteCt = getFileCommitTime(remoteGitDir, join("tier-b", rel).split(sep).join("/"));
     const winner = resolveStrategy(strategy, localCt, remoteCt);
     if (winner === "remote") {
@@ -295,19 +307,20 @@ export async function runMigrateIn(opts = {}) {
   }
 
   // 4. Compute the merge plan.
-  // Note: getFileCommitTime treats no-commit-found as Infinity; AC 6b
-  // requires this to be the local-untracked semantic ("untracked = newest").
-  // The local tier-b root may not be a git repo (the user's home tier-b
-  // tree usually isn't). In that case the fallback cleanly returns
-  // Infinity so untracked still wins.
-  const localGitDir = findLocalGitRoot(tierBRoot) || tierBRoot;
+  // localGitRoot is null when tier-b is plain files (production shape: the
+  // user's home dir is not a git repo). planMerge then uses filesystem mtime
+  // for local-ct instead of `git log`. Pairs with the utimesSync stamp in
+  // step 5: cards copied from a remote commit at epoch T have mtime = T, so
+  // round-trip migrate-in calls see honest comparisons rather than the
+  // pre-fix "always Infinity → always wins" silent-degenerate.
+  const localGitRoot = findLocalGitRoot(tierBRoot);
   const remoteGitDir = cloneRoot;
   const remoteTierBRoot = join(cloneRoot, "tier-b");
 
   const { decisions } = planMerge({
     localTierBRoot: tierBRoot,
     remoteTierBRoot,
-    localGitDir,
+    localGitRoot,
     remoteGitDir,
     strategy,
   });
@@ -332,6 +345,15 @@ export async function runMigrateIn(opts = {}) {
     const src = join(remoteTierBRoot, srcRelOnRemote);
     mkdirSync(dirname(dest), { recursive: true });
     copyFileSync(src, dest);
+    // Stamp dest mtime to the source commit's committed-date so subsequent
+    // migrate-in calls see honest local-ct values via getFileMtimeSeconds.
+    // If the lookup fails (no commit history for the file on the remote
+    // branch), fall back to copy-time mtime — matches the pre-fix behavior
+    // for that edge case.
+    const remoteCt = getFileCommitTime(remoteGitDir, "tier-b/" + d.relPath);
+    if (Number.isFinite(remoteCt)) {
+      try { utimesSync(dest, remoteCt, remoteCt); } catch { /* tolerate stamp failure; copy still succeeded */ }
+    }
     written += 1;
   }
 

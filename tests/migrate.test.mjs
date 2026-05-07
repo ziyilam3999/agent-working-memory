@@ -462,10 +462,16 @@ test("AC-6: prefer-newer-commit both-tracked → newer side wins", async () => {
 });
 
 // --------------------------------------------------------------------
-// 6. AC-6b: prefer-newer-commit, local-untracked. The local card has no
-// commit time (no .git in the WM root) so it MUST win over any remote ct.
+// 6. AC-6b (post-mtime-fix): prefer-newer-commit, local-untracked WITH a
+// fresh mtime (user just edited the card locally). Local mtime > remote ct
+// → local wins. Replaces the pre-fix Infinity-always-wins semantic with
+// "freshest local edit wins" — same intent, honest implementation.
+//
+// The companion test "AC-6c: stale-local-untracked loses to fresh-remote"
+// (added below) verifies the intentionally-changed half: when local mtime
+// is older than remote ct, remote correctly wins.
 
-test("AC-6b: prefer-newer-commit preserves locally-untracked cards", async () => {
+test("AC-6b: prefer-newer-commit preserves locally-fresh-untracked cards (mtime > remote-ct)", async () => {
   const tmp = mkdtempSync(join(tmpdir(), "awm-mig-ac6b-"));
   const root = join(tmp, "wm");
   mkdirSync(join(root, "tier-b"), { recursive: true });
@@ -503,6 +509,15 @@ test("AC-6b: prefer-newer-commit preserves locally-untracked cards", async () =>
     });
     assert.equal(ro.exitCode, 0);
 
+    // Bump local mtime to "freshly edited" (1 hour into the future) so the
+    // mtime-based local-ct strictly exceeds the remote commit time.
+    // Without this stamp, sub-second timing decides who wins under the new
+    // semantic — flaky. The +3600s is a deterministic guard that mirrors
+    // a real "user just edited this card locally" workflow.
+    const localPath = join(root, "tier-b", "topics", "demo", "untracked-1.md");
+    const future = Math.floor(Date.now() / 1000) + 3600;
+    importedFs.utimesSync(localPath, future, future);
+
     const ri = await runMigrateIn({
       root,
       clone: join(tmp, "in-clone"),
@@ -511,13 +526,287 @@ test("AC-6b: prefer-newer-commit preserves locally-untracked cards", async () =>
     });
     assert.equal(ri.exitCode, 0);
 
-    // Local untracked card preserved (NOT overwritten by remote).
-    const restored = readFileSync(
-      join(root, "tier-b", "topics", "demo", "untracked-1.md"),
-      "utf8",
-    );
+    // Local fresh-untracked card preserved (NOT overwritten by remote).
+    const restored = readFileSync(localPath, "utf8");
     assert.match(restored, /title:\s*PRESERVE local untracked/);
     assert.ok(!/title:\s*REMOTE side/.test(restored));
+  } finally {
+    restoreEnv(old);
+  }
+});
+
+// --------------------------------------------------------------------
+// 6c. AC-6c (new, mtime-fix): stale local-untracked card loses to
+// fresh-remote. Closes the silent-degenerate gap: pre-fix, every
+// non-git-rooted local card was treated as Infinity (always wins),
+// regardless of when it was actually copied/edited. Post-fix, an old
+// local copy correctly loses to a freshly-committed remote edit.
+
+test("AC-6c: prefer-newer-commit overwrites stale-local-untracked from fresh-remote (mtime < remote-ct)", async () => {
+  const tmp = mkdtempSync(join(tmpdir(), "awm-mig-ac6c-"));
+  const root = join(tmp, "wm");
+  mkdirSync(join(root, "tier-b"), { recursive: true });
+  // Local: untracked (no git init), with mtime stamped to 1 hour in the past.
+  seedTierB(join(root, "tier-b"), [{
+    id: "stale-1",
+    topic: "demo",
+    title: "STALE local",
+    pinned: true,
+  }]);
+  const localPath = join(root, "tier-b", "topics", "demo", "stale-1.md");
+  const past = Math.floor(Date.now() / 1000) - 3600;
+  importedFs.utimesSync(localPath, past, past);
+
+  const root2 = join(tmp, "wm2");
+  mkdirSync(join(root2, "tier-b"), { recursive: true });
+  seedTierB(join(root2, "tier-b"), [{
+    id: "stale-1",
+    topic: "demo",
+    title: "FRESH remote",
+    pinned: true,
+  }]);
+
+  const { remoteUrl } = makeLocalRemote(tmp);
+  const env = {
+    MIGRATE_REPO_REMOTE: remoteUrl,
+    MIGRATE_AUTHOR_NAME: "Test",
+    MIGRATE_AUTHOR_EMAIL: "test@test",
+  };
+  const old = saveEnv(Object.keys(env));
+  applyEnv(env);
+  try {
+    const ro = await runMigrateOut({
+      root: root2,
+      clone: join(tmp, "out-clone"),
+      targetBranch: "fresh-remote-branch",
+    });
+    assert.equal(ro.exitCode, 0);
+
+    const ri = await runMigrateIn({
+      root,
+      clone: join(tmp, "in-clone"),
+      fromBranch: "fresh-remote-branch",
+      strategy: "prefer-newer-commit",
+    });
+    assert.equal(ri.exitCode, 0);
+
+    // The decision matches copy-from-remote with finite local-ct (mtime,
+    // not Infinity). This is the round-trip-honesty signal — pre-fix this
+    // would have been "keep-local local-ct=Infinity remote-ct=...".
+    const decision = ri.decisions.find((d) => d.relPath === "topics/demo/stale-1.md");
+    assert.equal(decision.action, "copy-from-remote");
+    assert.match(decision.reason, /local-ct=\d+/);
+    assert.ok(!/local-ct=Infinity/.test(decision.reason));
+
+    const restored = readFileSync(localPath, "utf8");
+    assert.match(restored, /title:\s*FRESH remote/);
+    assert.ok(!/title:\s*STALE local/.test(restored));
+  } finally {
+    restoreEnv(old);
+  }
+});
+
+// --------------------------------------------------------------------
+// 6d. AC-6d (new, mtime-fix): copy-step mtime stamp. After migrate-in
+// copies a card from a remote commit at epoch T2, the local file's mtime
+// equals T2 within ±1s tolerance. Pairs with AC-6c — without this stamp,
+// round-trip migrate-in would always see local mtime=copy-time which
+// drifts further from remote-ct each round.
+
+test("AC-6d: copy-step mtime stamp matches source commit committed-date (±1s)", async () => {
+  const tmp = mkdtempSync(join(tmpdir(), "awm-mig-ac6d-"));
+  const root = join(tmp, "wm");
+  mkdirSync(join(root, "tier-b"), { recursive: true });
+  // Local starts EMPTY — the card will land via add-from-remote.
+
+  const root2 = join(tmp, "wm2");
+  mkdirSync(join(root2, "tier-b"), { recursive: true });
+  seedTierB(join(root2, "tier-b"), [{
+    id: "stamped-1",
+    topic: "demo",
+    title: "STAMPED",
+    pinned: true,
+  }]);
+
+  const { remoteUrl } = makeLocalRemote(tmp);
+  const env = {
+    MIGRATE_REPO_REMOTE: remoteUrl,
+    MIGRATE_AUTHOR_NAME: "Test",
+    MIGRATE_AUTHOR_EMAIL: "test@test",
+  };
+  const old = saveEnv(Object.keys(env));
+  applyEnv(env);
+  try {
+    const ro = await runMigrateOut({
+      root: root2,
+      clone: join(tmp, "out-clone"),
+      targetBranch: "stamp-branch",
+    });
+    assert.equal(ro.exitCode, 0);
+
+    const ri = await runMigrateIn({
+      root,
+      clone: join(tmp, "in-clone"),
+      fromBranch: "stamp-branch",
+      strategy: "prefer-newer-commit",
+    });
+    assert.equal(ri.exitCode, 0);
+
+    // Look up the remote commit time for the card via git log on the in-clone.
+    const remoteClone = join(tmp, "in-clone");
+    const remoteCt = Number.parseInt(
+      execFileSync(
+        "git",
+        ["log", "-1", "--format=%ct", "--", "tier-b/topics/demo/stamped-1.md"],
+        { cwd: remoteClone, encoding: "utf8" },
+      ).trim(),
+      10,
+    );
+    assert.ok(Number.isFinite(remoteCt), "remoteCt must be a finite epoch second");
+
+    const localPath = join(root, "tier-b", "topics", "demo", "stamped-1.md");
+    const localMtimeS = importedFs.statSync(localPath).mtimeMs / 1000;
+    assert.ok(
+      Math.abs(localMtimeS - remoteCt) <= 1,
+      `expected local mtime ≈ remote ct (${remoteCt}); got ${localMtimeS} (delta=${localMtimeS - remoteCt}s)`,
+    );
+  } finally {
+    restoreEnv(old);
+  }
+});
+
+// --------------------------------------------------------------------
+// 6e. AC-6e (new, mtime-fix): round-trip-no-change honesty. After a
+// migrate-in stamps mtimes to source-commit-cts, an immediate second
+// migrate-in --dry-run shows ALL keep-local decisions with finite
+// local-ct (not Infinity) for both-exist cards. Pre-fix every such line
+// would have shown local-ct=Infinity, masking any future legitimate
+// remote edit.
+
+test("AC-6e: round-trip migrate-in shows finite local-ct (not Infinity) on second invocation", async () => {
+  const tmp = mkdtempSync(join(tmpdir(), "awm-mig-ac6e-"));
+  const root = join(tmp, "wm");
+  mkdirSync(join(root, "tier-b"), { recursive: true });
+
+  const root2 = join(tmp, "wm2");
+  mkdirSync(join(root2, "tier-b"), { recursive: true });
+  seedTierB(join(root2, "tier-b"), [
+    { id: "rt-1", topic: "demo", title: "ROUND-TRIP-1", pinned: true },
+    { id: "rt-2", topic: "demo", title: "ROUND-TRIP-2", pinned: true },
+  ]);
+
+  const { remoteUrl } = makeLocalRemote(tmp);
+  const env = {
+    MIGRATE_REPO_REMOTE: remoteUrl,
+    MIGRATE_AUTHOR_NAME: "Test",
+    MIGRATE_AUTHOR_EMAIL: "test@test",
+  };
+  const old = saveEnv(Object.keys(env));
+  applyEnv(env);
+  try {
+    const ro = await runMigrateOut({
+      root: root2,
+      clone: join(tmp, "out-clone"),
+      targetBranch: "rt-branch",
+    });
+    assert.equal(ro.exitCode, 0);
+
+    // First migrate-in: lands the cards from remote, stamps local mtimes.
+    const ri1 = await runMigrateIn({
+      root,
+      clone: join(tmp, "in-clone"),
+      fromBranch: "rt-branch",
+      strategy: "prefer-newer-commit",
+    });
+    assert.equal(ri1.exitCode, 0);
+    assert.equal(ri1.written, 2);
+
+    // Second migrate-in (dry-run): expect both cards keep-local with
+    // finite local-ct, equal to remote-ct.
+    const ri2 = await runMigrateIn({
+      root,
+      clone: join(tmp, "in-clone-2"),
+      fromBranch: "rt-branch",
+      strategy: "prefer-newer-commit",
+      dryRun: true,
+    });
+    assert.equal(ri2.exitCode, 0);
+    for (const d of ri2.decisions) {
+      assert.equal(d.action, "keep-local", `expected keep-local for ${d.relPath}`);
+      assert.ok(
+        !/local-ct=Infinity/.test(d.reason),
+        `expected finite local-ct in reason; got: ${d.reason}`,
+      );
+      assert.match(d.reason, /local-ct=\d+/);
+    }
+  } finally {
+    restoreEnv(old);
+  }
+});
+
+// --------------------------------------------------------------------
+// 6f. AC-6f (new, mtime-fix): local-only short-circuit preserved. A card
+// that exists only locally (no remote counterpart) still keep-locals via
+// planMerge's short-circuit (action="keep-local", reason="remote-missing"),
+// never entering strategy resolution. This is the unchanged half of the
+// behavior, regression-guarded so a future refactor doesn't accidentally
+// treat local-only cards as both-exist.
+
+test("AC-6f: local-only card keeps-local via short-circuit (reason=remote-missing, never enters strategy)", async () => {
+  const tmp = mkdtempSync(join(tmpdir(), "awm-mig-ac6f-"));
+  const root = join(tmp, "wm");
+  mkdirSync(join(root, "tier-b"), { recursive: true });
+  seedTierB(join(root, "tier-b"), [{
+    id: "local-only-1",
+    topic: "demo",
+    title: "LOCAL ONLY",
+    pinned: true,
+  }]);
+
+  // Remote starts EMPTY (no card with the same path).
+  const root2 = join(tmp, "wm2");
+  mkdirSync(join(root2, "tier-b"), { recursive: true });
+  seedTierB(join(root2, "tier-b"), [{
+    id: "different-card",
+    topic: "demo",
+    title: "DIFFERENT",
+    pinned: true,
+  }]);
+
+  const { remoteUrl } = makeLocalRemote(tmp);
+  const env = {
+    MIGRATE_REPO_REMOTE: remoteUrl,
+    MIGRATE_AUTHOR_NAME: "Test",
+    MIGRATE_AUTHOR_EMAIL: "test@test",
+  };
+  const old = saveEnv(Object.keys(env));
+  applyEnv(env);
+  try {
+    const ro = await runMigrateOut({
+      root: root2,
+      clone: join(tmp, "out-clone"),
+      targetBranch: "local-only-branch",
+    });
+    assert.equal(ro.exitCode, 0);
+
+    const ri = await runMigrateIn({
+      root,
+      clone: join(tmp, "in-clone"),
+      fromBranch: "local-only-branch",
+      strategy: "prefer-newer-commit",
+      dryRun: true,
+    });
+    assert.equal(ri.exitCode, 0);
+
+    const localOnly = ri.decisions.find((d) => d.relPath === "topics/demo/local-only-1.md");
+    assert.equal(localOnly.action, "keep-local");
+    assert.equal(localOnly.reason, "remote-missing"); // short-circuit reason, NOT strategy=...
+    assert.ok(!/strategy=/.test(localOnly.reason), "must not enter strategy resolution");
+
+    // The remote-only card lands as add-from-remote, no comparison.
+    const remoteOnly = ri.decisions.find((d) => d.relPath === "topics/demo/different-card.md");
+    assert.equal(remoteOnly.action, "add-from-remote");
+    assert.equal(remoteOnly.reason, "local-missing");
   } finally {
     restoreEnv(old);
   }
