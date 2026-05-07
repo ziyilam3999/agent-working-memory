@@ -6,7 +6,7 @@
 
 The migrate-in CLI has a flag called `--strategy prefer-newer-commit`. The promise is: "if the same card exists on both your computer and the migration branch, the version with the newer commit time wins." Useful for round-trip drains where two hosts both edit and you want the latest one.
 
-Bug: on a normal user machine, the runtime tier-b folder (`~/.claude/agent-working-memory/tier-b/`) is just plain files in your home directory — it's not a git repo. The CLI tries to look up "when was this local file last committed?" via `git log`, fails because there's no git repo, and falls back to "Infinity" (which means "infinitely new"). So the local copy ALWAYS wins, regardless of whether the remote has a brand-new edit.
+Bug: on a normal user machine, the runtime tier-b folder (the working-memory tree under the user's home) is just plain files — not a git repo. The CLI tries to look up "when was this local file last committed?" via `git log`, fails because there's no git repo, and falls back to "Infinity" (which means "infinitely new"). So the local copy ALWAYS wins, regardless of whether the remote has a brand-new edit.
 
 Concrete consequence on macbook today: every one of 309 cards showed `local-ct=Infinity` in the verbose output. None of those comparisons would have caught a legitimately-newer remote edit. Today the 4 cards that wrote did so via `add-from-remote` (local was missing entirely, no comparison), so nothing was masked. But the next round-trip drain where a card has been edited on both sides would silently lose the remote edit.
 

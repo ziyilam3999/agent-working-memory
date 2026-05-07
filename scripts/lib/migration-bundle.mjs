@@ -149,8 +149,8 @@ export function getFileCommitTime(gitDir, relPath) {
 }
 
 // Filesystem-mtime fallback for runtime tier-b roots that are NOT inside a
-// git repo (the production shape: ~/.claude/agent-working-memory/tier-b/ is
-// plain files in the user's home dir, no .git ancestry). Returns the file's
+// git repo (the production shape: tier-b lives as plain files under the
+// user's working-memory home, with no .git ancestry). Returns the file's
 // mtime in epoch seconds, or Infinity on stat error (preserves the
 // untracked-wins safety net for genuinely-missing files — which shouldn't
 // happen in planMerge since it only enumerates existing files, but guards
