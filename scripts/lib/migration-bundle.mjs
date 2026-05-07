@@ -143,7 +143,26 @@ export function getFileCommitTime(gitDir, relPath) {
     return n;
   } catch {
     // Not a git dir, or git missing — treat as "no commit info" → Infinity
-    // (preserves the untracked-wins semantic).
+    // (preserves the untracked-wins semantic for in-repo-but-untracked cards).
+    return Infinity;
+  }
+}
+
+// Filesystem-mtime fallback for runtime tier-b roots that are NOT inside a
+// git repo (the production shape: tier-b lives as plain files under the
+// user's working-memory home, with no .git ancestry). Returns the file's
+// mtime in epoch seconds, or Infinity on stat error (preserves the
+// untracked-wins safety net for genuinely-missing files — which shouldn't
+// happen in planMerge since it only enumerates existing files, but guards
+// against a race between enumerate and lookup).
+//
+// Pairs with the utimesSync stamp in runMigrateIn's copy step: cards copied
+// from a remote commit at epoch T have mtime = T, so subsequent migrate-ins
+// see honest local-ct values instead of always-Infinity.
+export function getFileMtimeSeconds(absPath) {
+  try {
+    return Math.floor(statSync(absPath).mtimeMs / 1000);
+  } catch {
     return Infinity;
   }
 }
