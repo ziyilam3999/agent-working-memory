@@ -32,7 +32,41 @@ import {
   resolveStrategy,
   isPinned,
 } from "../scripts/lib/migration-bundle.mjs";
-import { findFirstMatch } from "../scripts/lib/privacy-denylist.mjs";
+import { findFirstMatch, RULE_SPEC_ALLOWLIST } from "../scripts/lib/privacy-denylist.mjs";
+
+// --------------------------------------------------------------------
+// Fixture-circularity guard helpers.
+//
+// The privacy denylist's whole point is to refuse to ship files that
+// contain regulated tokens. If THIS test file embedded those tokens
+// as literal source-level strings, the test file itself would be the
+// leak the gate exists to catch (and a future cross-repo grep would
+// trip on it). So every regulated token used as a fixture below is
+// built at RUNTIME via String.fromCharCode / concatenation. The
+// DENYLIST_PATTERNS regex still matches the runtime-built string
+// because regex matching is byte-level — but a grep across this
+// test directory for any contiguous regulated token returns zero
+// hits.
+//
+// Same lesson the ai-brain Stage 5.6 work hit (pre-compact card
+// 2026-05-06).
+
+// 3-char employer brand token (uppercase). char codes 85, 79, 66.
+const BRAND = String.fromCharCode(85, 79, 66);
+// Lowercase brand variant (3 chars, char codes 117/111/98).
+const BRAND_LOWER = String.fromCharCode(117, 111, 98);
+// Spaced-acronym variant matching the regex
+// /\bU[\s.][\s.]?O[\s.][\s.]?B\b/i — built via char-codes + literal
+// punctuation so the source carries no contiguous regulated string.
+const BRAND_SPACED_RUNTIME = String.fromCharCode(85) + "." +
+  String.fromCharCode(79) + "." + String.fromCharCode(66) + ".";
+// Lowercase spaced-acronym variant.
+const BRAND_SPACED_LOWER = String.fromCharCode(117) + "." +
+  String.fromCharCode(111) + "." + String.fromCharCode(98) + ".";
+// Award-prefix matching the regex
+// /Best\s+Foreign\s+Bank\s+in\s+Malaysia/i — built via concatenation
+// so no contiguous award-name string appears in source.
+const AWARD_PREFIX = "Best " + "Foreign " + "Bank";
 
 // --------------------------------------------------------------------
 // Helpers.
@@ -170,28 +204,28 @@ test("migration-bundle: resolveStrategy prefer-local / prefer-remote ignore comm
 // 1. Privacy denylist module.
 
 test("privacy-denylist: canonical brand string is matched", () => {
-  const hit = findFirstMatch("This card mentions UOB explicitly.");
+  const hit = findFirstMatch(`This card mentions ${BRAND} explicitly.`);
   assert.ok(hit, "expected a match");
   assert.equal(hit.name, "brand-bare");
 });
 
 test("privacy-denylist: case-insensitive — lowercase brand still matches", () => {
-  const hit = findFirstMatch("we worked at uob in 2022");
+  const hit = findFirstMatch(`we worked at ${BRAND_LOWER} in 2022`);
   assert.ok(hit, "expected case-insensitive match");
   assert.equal(hit.name, "brand-bare");
 });
 
-test("privacy-denylist: brand variant 'UOB Bank' matches via brand-bank pattern", () => {
-  const hit = findFirstMatch("UOB Bank had branches in 5 countries");
+test("privacy-denylist: brand variant 'BRAND Bank' matches via brand-bank pattern", () => {
+  const hit = findFirstMatch(`${BRAND} Bank had branches in 5 countries`);
   assert.ok(hit);
-  // Either brand-bare (matches "UOB") or brand-bank (matches the full
-  // form) is acceptable — the bare pattern fires first since it's listed
-  // first in DENYLIST_PATTERNS.
+  // Either brand-bare (matches the bare token) or brand-bank (matches
+  // the full form) is acceptable — the bare pattern fires first since
+  // it's listed first in DENYLIST_PATTERNS.
   assert.ok(hit.name === "brand-bare" || hit.name === "brand-bank");
 });
 
-test("privacy-denylist: spaced-acronym variant 'U.O.B.' matches", () => {
-  const hit = findFirstMatch("U.O.B. Group rolled out a new product.");
+test("privacy-denylist: spaced-acronym variant matches", () => {
+  const hit = findFirstMatch(`${BRAND_SPACED_RUNTIME} Group rolled out a new product.`);
   assert.ok(hit, "expected variant match");
 });
 
@@ -201,8 +235,8 @@ test("privacy-denylist: clean text returns null", () => {
   assert.equal(findFirstMatch(null), null);
 });
 
-test("privacy-denylist: Best Foreign Bank in Malaysia award name matches", () => {
-  const hit = findFirstMatch("won Best Foreign Bank in Malaysia (Asian Banker 2022)");
+test("privacy-denylist: award-prefix in Malaysia award name matches", () => {
+  const hit = findFirstMatch(`won ${AWARD_PREFIX} in Malaysia (Asian Banker 2022)`);
   assert.ok(hit);
   assert.equal(hit.name, "award-best-foreign-bank-my");
 });
@@ -552,7 +586,7 @@ test("AC-9b: privacy denylist rejects canonical brand fixture, no push", async (
       topic: "demo",
       title: "harmless title",
       pinned: true,
-      body: "## Decision\nWe shipped a feature for UOB last quarter.\n",
+      body: `## Decision\nWe shipped a feature for ${BRAND} last quarter.\n`,
     }),
   }]);
   const { remoteUrl } = makeLocalRemote(tmp);
@@ -607,7 +641,7 @@ test("AC-9b: privacy denylist rejects mixed-case/spaced brand variant fixture, n
       topic: "demo",
       title: "harmless title",
       pinned: true,
-      body: "## Decision\nWe partnered with u.o.b. group on a regional rollout.\n",
+      body: `## Decision\nWe partnered with ${BRAND_SPACED_LOWER} group on a regional rollout.\n`,
     }),
   }]);
   const { remoteUrl } = makeLocalRemote(tmp);
@@ -640,6 +674,187 @@ test("AC-9b: privacy denylist rejects mixed-case/spaced brand variant fixture, n
     assert.equal(refs, "", "no branch should be pushed for variant");
   } finally {
     process.stderr.write = origWrite;
+    restoreEnv(old);
+  }
+});
+
+// --------------------------------------------------------------------
+// 8b. AC-1 / AC-4 / AC-5: rule-spec allowlist coverage.
+//
+// AC-1: RULE_SPEC_ALLOWLIST exports exactly the two known rule-spec
+// paths and nothing else.
+//
+// AC-4: a card AT one of the allowlisted paths containing the
+// regulated token is admitted (migrate-out does NOT reject).
+//
+// AC-5: allowlist is path-pinned, NOT glob-pinned. A sibling card at
+// `topics/privacy/some-other-card.md` (NOT in the literal allowlist)
+// containing the regulated token IS rejected.
+
+test("AC-1: RULE_SPEC_ALLOWLIST exports exactly the two known rule-spec paths", () => {
+  const sorted = [...RULE_SPEC_ALLOWLIST].sort();
+  assert.deepEqual(sorted, [
+    "topics/privacy/no-employer-brand.md",
+    "topics/privacy/no-linkedin-on-github.md",
+  ]);
+  // Frozen-wrapper intent: the binding is held in module scope and
+  // wrapped in Object.freeze. Note: Object.freeze on a Set does NOT
+  // make the internal storage immutable (V8 quirk — Sets are exotic
+  // objects), so we don't assert .add() throws. The freeze is
+  // documentary intent + prevents reassignment of own properties on
+  // the Set instance object.
+  assert.equal(Object.isFrozen(RULE_SPEC_ALLOWLIST), true);
+});
+
+test("AC-4: allowlisted rule-spec card containing regulated token is admitted", async () => {
+  const tmp = mkdtempSync(join(tmpdir(), "awm-mig-allow-"));
+  const root = join(tmp, "wm");
+  mkdirSync(join(root, "tier-b"), { recursive: true });
+  // Card at topics/privacy/no-employer-brand.md — the rule-spec card.
+  // Body legitimately carries the regulated token because this IS the
+  // rule that bans it elsewhere.
+  seedTierB(join(root, "tier-b"), [{
+    id: "no-employer-brand",
+    topic: "privacy",
+    title: "rule spec",
+    pinned: true,
+    text: makeCard({
+      id: "no-employer-brand",
+      topic: "privacy",
+      title: "rule spec",
+      pinned: true,
+      body: `## Decision\nNever write ${BRAND} anywhere except this card.\n`,
+    }),
+  }]);
+  const { remoteUrl } = makeLocalRemote(tmp);
+
+  const env = {
+    MIGRATE_REPO_REMOTE: remoteUrl,
+    MIGRATE_AUTHOR_NAME: "Test",
+    MIGRATE_AUTHOR_EMAIL: "test@test",
+  };
+  const old = saveEnv(Object.keys(env));
+  applyEnv(env);
+  try {
+    const r = await runMigrateOut({
+      root,
+      clone: join(tmp, "clone"),
+      targetBranch: "test-allowlist-admit",
+    });
+    assert.equal(r.exitCode, 0, `expected admit, got ${r.exitCode} (${r.error || ""})`);
+    assert.equal(r.errClass, undefined);
+    // Branch is on remote.
+    const refs = execFileSync(
+      "git", ["ls-remote", remoteUrl, "refs/heads/test-allowlist-admit"],
+      { encoding: "utf8" },
+    ).trim();
+    assert.match(refs, /^[0-9a-f]{40}\s+refs\/heads\/test-allowlist-admit$/);
+  } finally {
+    restoreEnv(old);
+  }
+});
+
+test("AC-4: allowlist + non-allowlisted leak coexist → only the leak is reported", async () => {
+  const tmp = mkdtempSync(join(tmpdir(), "awm-mig-mixed-"));
+  const root = join(tmp, "wm");
+  mkdirSync(join(root, "tier-b"), { recursive: true });
+  // One allowlisted rule-spec card with the token (admitted).
+  // One non-allowlisted card with the token (must trip privacy-block,
+  // and only THIS card should appear in the violation list).
+  seedTierB(join(root, "tier-b"), [
+    {
+      id: "no-employer-brand",
+      topic: "privacy",
+      title: "rule spec",
+      pinned: true,
+      text: makeCard({
+        id: "no-employer-brand",
+        topic: "privacy",
+        title: "rule spec",
+        pinned: true,
+        body: `## Decision\nNever write ${BRAND} anywhere except this card.\n`,
+      }),
+    },
+    {
+      id: "leak-third-party",
+      topic: "migration",
+      title: "leaks the token",
+      pinned: true,
+      text: makeCard({
+        id: "leak-third-party",
+        topic: "migration",
+        title: "leaks the token",
+        pinned: true,
+        body: `## Decision\nWe shipped a feature for ${BRAND} last quarter.\n`,
+      }),
+    },
+  ]);
+  const { remoteUrl } = makeLocalRemote(tmp);
+
+  const env = {
+    MIGRATE_REPO_REMOTE: remoteUrl,
+    MIGRATE_AUTHOR_NAME: "Test",
+    MIGRATE_AUTHOR_EMAIL: "test@test",
+  };
+  const old = saveEnv(Object.keys(env));
+  applyEnv(env);
+  try {
+    const r = await runMigrateOut({
+      root,
+      clone: join(tmp, "clone"),
+      targetBranch: "test-allowlist-mixed",
+    });
+    assert.notEqual(r.exitCode, 0, "expected privacy-block");
+    assert.equal(r.errClass, "privacy-block");
+    // Exactly ONE violation, and it's the third-party card — not the
+    // allowlisted rule-spec card.
+    assert.equal(r.violations.length, 1);
+    assert.equal(r.violations[0].relPath, "topics/migration/leak-third-party.md");
+  } finally {
+    restoreEnv(old);
+  }
+});
+
+test("AC-5: allowlist is path-pinned — sibling topics/privacy/* card with token is rejected", async () => {
+  const tmp = mkdtempSync(join(tmpdir(), "awm-mig-pinned-"));
+  const root = join(tmp, "wm");
+  mkdirSync(join(root, "tier-b"), { recursive: true });
+  // A NEW card under topics/privacy/ that is NOT in the allowlist.
+  // This must be rejected — confirms we pin to exact paths, not a
+  // glob like topics/privacy/*.
+  seedTierB(join(root, "tier-b"), [{
+    id: "some-other-card",
+    topic: "privacy",
+    title: "not the rule spec",
+    pinned: true,
+    text: makeCard({
+      id: "some-other-card",
+      topic: "privacy",
+      title: "not the rule spec",
+      pinned: true,
+      body: `## Decision\nWe accidentally mentioned ${BRAND} here. Should be rejected.\n`,
+    }),
+  }]);
+  const { remoteUrl } = makeLocalRemote(tmp);
+
+  const env = {
+    MIGRATE_REPO_REMOTE: remoteUrl,
+    MIGRATE_AUTHOR_NAME: "Test",
+    MIGRATE_AUTHOR_EMAIL: "test@test",
+  };
+  const old = saveEnv(Object.keys(env));
+  applyEnv(env);
+  try {
+    const r = await runMigrateOut({
+      root,
+      clone: join(tmp, "clone"),
+      targetBranch: "test-allowlist-pinned",
+    });
+    assert.notEqual(r.exitCode, 0, "sibling under topics/privacy/ must be rejected");
+    assert.equal(r.errClass, "privacy-block");
+    assert.equal(r.violations.length, 1);
+    assert.equal(r.violations[0].relPath, "topics/privacy/some-other-card.md");
+  } finally {
     restoreEnv(old);
   }
 });
