@@ -38,6 +38,31 @@
 //
 // Determinism: pure module. No I/O. Patterns are frozen at import time.
 
+// --------------------------------------------------------------------
+// Rule-spec allowlist.
+//
+// Two cards LEGITIMATELY carry the regulated employer-brand token
+// because they ARE the rule that bans it everywhere else:
+//   - topics/privacy/no-employer-brand.md
+//   - topics/privacy/no-linkedin-on-github.md
+//
+// parent-claude.md "## Privacy & Employer-Brand Hygiene" carves them
+// out as the only on-disk exemption: "rule-spec files (the privacy
+// card + per-project `feedback_no_employer_mention.md`) intentionally
+// carry the token; no other file is exempt."
+//
+// Consumers (migrate-out, future /ship) consult this set BEFORE
+// running the denylist scan and admit allowlisted cards without
+// scanning. Path-pinned (exact equality) — NOT glob-pinned — so a
+// future `topics/privacy/some-other-card.md` that doesn't actually
+// need the token can't sneak past the gate.
+//
+// Determinism: frozen at import time. Cannot be mutated at runtime.
+export const RULE_SPEC_ALLOWLIST = Object.freeze(new Set([
+  "topics/privacy/no-employer-brand.md",
+  "topics/privacy/no-linkedin-on-github.md",
+]));
+
 // Each entry is { name, pattern } so callers can render a meaningful
 // reject reason (e.g., "PRIVACY-BLOCK pattern=brand-bare").
 export const DENYLIST_PATTERNS = Object.freeze([
